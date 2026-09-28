@@ -1,0 +1,43 @@
+# =============================================================================
+# TACKLE — Pipeline Configuration (merged datasets)
+# =============================================================================
+# Run with:  python main.py --config config/pipeline_merged.yaml
+# CLI arguments override these values.
+#
+# A merged item bundles several QA pairs over the same tables; the KG is built
+# once per merged item and every QA pair is answered against it.
+
+# Which merged dataset to run:
+#   dirty_merged_two_table   -> data/dirty_merged_MMQA/dirty_merged_MMQA_two_table.json   (Practical MMQA 2T)
+#   dirty_merged_three_table -> data/dirty_merged_MMQA/dirty_merged_MMQA_three_table.json (Practical MMQA 3T)
+#   merged_two_table         -> data/merged_MMQA/merged_two_table.json
+#   merged_three_table       -> data/merged_MMQA/merged_three_table.json
+#   merged_self              -> data/merged_self/merged_self.json (ERP-QA)
+# --dataset-file <path> bypasses this, e.g. data/selfBenchmark3/merged_self.json
+dataset: dirty_merged_two_table
+
+# Output directory for results & intermediate artifacts
+output_dir: outputs/random_merged0910
+
+# Enable debug-level logging and per-stage console reports
+verbose: false
+
+# Randomly run this many merged items.
+#   > 0 : randomly sample this many items (overrides start_item / end_item)
+#   0   : fall back to the start_item / end_item id range below
+random_num_items: 10
+
+# Inclusive item.id_ range (used only when random_num_items is 0 / unset)
+start_item: 1000481
+end_item: 1000481
+
+# Pipeline stop point: cluster | merge | relation | schema | instance | full
+phase: full
+
+# Also run direct NL→Cypher translation (single LLM call, TACKLE-naive)
+# alongside the two-step pipeline, and report both accuracies.
+direct_cypher: true
+
+# Error-repair loop for the two-step pipeline (see config/pipeline.yaml)
+cypher_repair: false
+cypher_repair_attempts: 3

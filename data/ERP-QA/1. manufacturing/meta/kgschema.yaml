@@ -1,0 +1,169 @@
+# V2 example for the enterprise scenario.
+#
+# Important:
+# - Plant intentionally has NO `id` block.
+#   plant_name itself is the identifier.
+# - Entities that need generated IDs use:
+#       id:
+#         prefix: M
+#         digits: 3
+#   This produces M001, M002, ..., not M1, M2.
+# - Hierarchical entities use `parent` and `count_per_parent`.
+# - An entity without `id` samples its first property WITHOUT replacement, so
+#   its count (see specify.yaml) must not exceed the number of `values`.
+# - Relations below are generated in the order they are listed; every
+#   cardinality and consistency rule is enforced and checked by
+#   generate_instance.py (it fails loudly instead of emitting bad data).
+
+entities:
+
+  Plant:
+    properties:
+      plant_name:
+        values:
+          - Vienna_Plant
+          - Graz_Plant
+          - Linz_Plant
+          - Salzburg_Plant
+          - Innsbruck_Plant
+
+  Department:
+    parent: Plant
+    count_per_parent: [1, 3]
+    properties:
+      department_name:
+        values:
+          - Assembly
+          - Machining
+          - Testing
+          - Packaging
+
+  Machine:
+    parent: Department
+    count_per_parent: [1, 2]
+    id:
+      prefix: M
+      digits: 3
+    properties:
+      machine_type:
+        values:
+          - CNC
+          - Press
+          - Lathe
+          - Welding
+      capacity:
+        type: integer
+        range: [50, 200]
+
+  Product:
+    count: 2
+    id:
+      prefix: PR
+      digits: 3
+    # properties:
+    #   product_name:
+    #     values:
+    #       - Gear Housing
+    #       - Drive Shaft
+    #       - Valve
+    #       - Pump Housing
+    #       - Brake Component
+    #       - Hydraulic Unit
+    #       - Motor Housing
+    #       - Control Module
+
+  Part:
+    count: 2
+    id:
+      prefix: PT
+      digits: 3
+    properties:
+      part_type:
+        values:
+          - Bearing
+          - Motor
+          - Sensor
+          - Pump
+      part_status:
+        values:
+          - Available
+          - In_Use
+          - Maintenance
+
+  ProductionOrder:
+    count: 2
+    id:
+      prefix: O
+      digits: 4
+    properties:
+      production_date:
+        type: date
+        range: ["2024-01-01", "2025-12-31"]
+      actual_quantity:
+        type: integer
+        range: [100, 1000]
+      scrap_quantity:
+        type: integer
+        range: [0, 80]
+
+# --------------------- Relations (non-hierarchical edges) ---------------------
+# from_cardinality {min, max}: how many targets each source has.
+# to_cardinality   {min, max}: how many sources each target has.
+#   (min defaults to 0; a missing/null max means unlimited)
+# consistency: source and target must share an anchor value. An anchor path is
+#   a chain of `<relation>.source` / `<relation>.target` steps (relations listed
+#   EARLIER in this file) optionally ending in a field name.
+relations:
+  - name: produce
+    from: Machine
+    to: Product
+    from_cardinality:
+      min: 1
+      max: 3
+    to_cardinality:
+      min: 1      # every product is made by at least one machine
+
+  - name: produceAt
+    from: ProductionOrder
+    to: Plant
+    from_cardinality:
+      min: 1
+      max: 1      # exactly one plant per order
+
+  - name: forProduct
+    from: ProductionOrder
+    to: Product
+    from_cardinality:
+      min: 1
+      max: 1      # exactly one product per order
+    # An order is only for a product that some machine at the order's plant makes.
+    consistency:
+      source_anchor: produceAt.target               # the order's plant
+      target_anchor: produce.source.parent_Plant    # plants whose machines make the product
+
+  - name: hasPart
+    from: Plant
+    to: Part
+    from_cardinality:
+      min: 1      # every plant owns at least one part
+    to_cardinality:
+      min: 1
+      max: 1      # each part belongs to exactly one plant
+
+  - name: usePart
+    from: Machine
+    to: Part
+    from_cardinality:
+      min: 0
+      max: 3
+    to_cardinality:
+      min: 0
+      max: 1      # each part is installed on at most one machine
+    # A machine only uses parts owned by its own plant.
+    consistency:
+      source_anchor: parent_Plant                   # the machine's plant
+      target_anchor: hasPart.source                 # the plant that owns the part
+    properties:
+      installation_date:
+        type: date
+        range: ["2023-01-01", "2025-12-31"]

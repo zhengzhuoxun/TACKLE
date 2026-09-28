@@ -1,0 +1,232 @@
+# ERP-QA scenario 3: Retail Operations
+# Scope: a multi-store retailer, covering store inventory, suppliers,
+# customer orders, sales handling, and returns.
+# Counting: an `id` block is one entity property; each `parent` is one relation.
+# Expected: 7 entities, 9 relations (8 explicit + 1 parent),
+#           40 entity properties (34 explicit + 6 generated IDs),
+#           4 relation properties.
+# Relations are listed in dependency order for consistency anchors.
+
+entities:
+  Store:
+    count: 4
+    properties:
+      store_code:
+        unique: true
+        values: [VIE01, GRZ01, LNZ01, SLZ01, INN01, KLF01]
+      store_name:                  # aligned: each code has one fixed name
+        aligned_with: store_code
+        values: [Central, Riverside, North_Gate, City_Mall, West_End, Station_Plaza]
+      city:                        # aligned: VIE01 -> Vienna, GRZ01 -> Graz, ...
+        aligned_with: store_code
+        values: [Vienna, Graz, Linz, Salzburg, Innsbruck, Klagenfurt]
+      floor_area_sqm:
+        type: integer
+        range: [200, 2500]
+      opening_year:
+        type: integer
+        range: [1998, 2024]
+      store_format:
+        values: [Flagship, Shopping_Center, High_Street, Outlet]
+
+  Employee:
+    parent: Store
+    count_per_parent: [2, 3]
+    id:
+      prefix: RE
+      digits: 4
+    properties:
+      employee_name:
+        values: [Alex_Meyer, Nora_Weber, Luka_Huber, Sara_Klein, David_Wagner, Mia_Bauer, Elias_Fischer, Lena_Hofer, Tom_Gruber, Nina_Schmid, Leon_Berger, Eva_Wolf]
+      role:
+        values: [Sales_Associate, Cashier, Shift_Lead, Store_Manager, Inventory_Clerk]
+      employment_status:
+        values: [Full_Time, Part_Time, Temporary]
+      hire_date:
+        type: date
+        range: ['2018-01-01', '2025-12-31']
+      monthly_sales_target_eur:
+        type: integer
+        range: [1500, 18000]
+
+  Product:
+    count: 24
+    id:
+      prefix: RP
+      digits: 4
+    properties:
+      product_name:
+        values: [Wireless_Mouse, USB_C_Hub, Desk_Lamp, Water_Bottle, Travel_Mug, Laptop_Sleeve, Notebook_Set, Cable_Organizer, Backpack, Phone_Stand, Power_Bank, Keyboard, Headphones, Monitor_Arm, Storage_Box, Coffee_Grinder]
+      category:
+        values: [Electronics, Home_Office, Travel, Accessories, Homeware]
+      brand:
+        values: [Alto, Brava, Canto, Deltis, Evara, Fenix]
+      list_price_eur:
+        type: integer
+        range: [10, 350]
+      unit_cost_eur:
+        type: integer
+        range: [5, 180]
+      product_status:
+        values: [Active, Seasonal, Discontinued]
+
+  Supplier:
+    count: 6
+    id:
+      prefix: RS
+      digits: 3
+    properties:
+      supplier_name:
+        values: [Nord_Trade, Alpine_Goods, Danube_Distribution, Central_Sourcing, Westport_Wholesale, Metro_Supply, Euro_Components]
+      country:
+        values: [Austria, Germany, Italy, Czechia, Poland, Netherlands]
+      lead_time_days:
+        type: integer
+        range: [2, 30]
+      supplier_rating:
+        type: integer
+        range: [1, 5]
+
+  Customer:
+    count: 25
+    id:
+      prefix: RC
+      digits: 4
+    properties:
+      customer_name:
+        values: [Anna_Novak, Max_Fischer, Julia_Hartmann, Luca_Berger, Emma_Moser, Paul_Winkler, Sofia_Leitner, Felix_Gruber, Lara_Steiner, Jonas_Brunner, Ella_Haas, Marie_Becker]
+      loyalty_tier:
+        values: [Standard, Silver, Gold, Platinum]
+      registration_date:
+        type: date
+        range: ['2020-01-01', '2025-12-31']
+      preferred_channel:
+        values: [In_Store, Online, Mobile_App]
+
+  SalesOrder:
+    count: 45
+    id:
+      prefix: SO
+      digits: 5
+    properties:
+      order_date:
+        type: date
+        range: ['2024-01-01', '2025-12-31']
+      order_status:
+        values: [Completed, Processing, Cancelled]
+      discount_pct:
+        type: integer
+        range: [0, 30]
+      order_channel:
+        values: [In_Store, Click_And_Collect, Online]
+
+  ReturnRecord:
+    count: 12
+    id:
+      prefix: RR
+      digits: 4
+    properties:
+      return_date:
+        type: date
+        range: ['2024-01-01', '2025-12-31']
+      return_reason:
+        values: [Damaged, Wrong_Item, Unwanted, Defective, Size_Mismatch]
+      refund_amount_eur:
+        type: integer
+        range: [5, 300]
+      return_status:
+        values: [Requested, Approved, Rejected, Refunded]
+      condition_grade:
+        values: [Unopened, Like_New, Used, Damaged]
+
+relations:
+  - name: stocks
+    from: Store
+    to: Product
+    from_cardinality:
+      min: 5
+      max: 12
+    to_cardinality:
+      min: 0
+    properties:
+      on_hand_qty:
+        type: integer
+        range: [5, 350]
+      reorder_threshold:
+        type: integer
+        range: [2, 60]
+
+  - name: supplies
+    from: Supplier
+    to: Product
+    from_cardinality:
+      min: 1
+    to_cardinality:
+      min: 1
+
+  - name: places
+    from: Customer
+    to: SalesOrder
+    from_cardinality:
+      min: 0
+      max: 4
+    to_cardinality:
+      min: 1
+      max: 1
+
+  - name: processedAt
+    from: SalesOrder
+    to: Store
+    from_cardinality:
+      min: 1
+      max: 1
+
+  - name: containsProduct
+    from: SalesOrder
+    to: Product
+    from_cardinality:
+      min: 1
+      max: 3
+    # An order may only contain products stocked by its processing store.
+    consistency:
+      source_anchor: processedAt.target
+      target_anchor: stocks.source
+    properties:
+      purchased_qty:
+        type: integer
+        range: [1, 8]
+      unit_price_eur:
+        type: integer
+        range: [8, 350]
+
+  - name: handledBy
+    from: SalesOrder
+    to: Employee
+    from_cardinality:
+      min: 1
+      max: 1
+    # The employee must belong to the same store that processed the order.
+    consistency:
+      source_anchor: processedAt.target
+      target_anchor: parent_Store
+
+  - name: returnOf
+    from: ReturnRecord
+    to: SalesOrder
+    from_cardinality:
+      min: 1
+      max: 1
+    to_cardinality:
+      min: 0
+      max: 1
+
+  - name: approvedBy
+    from: ReturnRecord
+    to: Employee
+    from_cardinality:
+      min: 0
+      max: 1
+    # Return approvals are handled by the order's store.
+    consistency:
+      source_anchor: returnOf.target.processedAt.target
+      target_anchor: parent_Store

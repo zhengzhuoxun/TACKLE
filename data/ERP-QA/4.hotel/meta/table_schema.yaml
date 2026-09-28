@@ -1,0 +1,312 @@
+# ERP-QA Table Schema: Hotel Hospitality
+# Generator-side source-column provenance. Physical names are deliberately
+# heterogeneous and unaligned with KG concept/property names.
+# foreign_keys are construction metadata, not a relational schema given to QA models.
+tables:
+- name: property_cards
+  base: entity
+  entity: Hotel
+  description: Hotel portfolio reference records
+  primary_key:
+  - property_ref
+  foreign_keys: []
+  columns:
+  - name: property_ref
+    value_from: entity.Hotel.hotel_code
+    description: Hotel code
+  - name: public_label
+    value_from: entity.Hotel.hotel_name
+    description: Hotel public-facing name
+  - name: metro
+    value_from: entity.Hotel.city
+    description: Hotel city
+  - name: market_band
+    value_from: entity.Hotel.category
+    description: Property market category
+  - name: stars
+    value_from: entity.Hotel.star_rating
+    description: Star classification
+  - name: opened_yr
+    value_from: entity.Hotel.opening_year
+    description: Year the hotel opened
+- name: unit_directory
+  base: entity
+  entity: Room
+  description: Room register with hotel location and standard tariffs
+  primary_key:
+  - unit_key
+  foreign_keys:
+  - column: property_code
+    references:
+      table: property_cards
+      column: property_ref
+  columns:
+  - name: unit_key
+    value_from: entity.Room.id
+    description: Internal room reference
+  - name: property_code
+    value_from: entity.Room.parent_Hotel
+    description: Hotel to which this room belongs
+  - name: door_no
+    value_from: entity.Room.room_number
+    description: Visible room number
+  - name: class_code
+    value_from: entity.Room.room_type
+    description: Room category
+  - name: level_no
+    value_from: entity.Room.floor_number
+    description: Building floor
+  - name: bed_limit
+    value_from: entity.Room.max_occupancy
+    description: Maximum number of occupants
+  - name: rack_rate
+    value_from: entity.Room.base_rate_eur
+    description: Standard nightly room price in EUR
+- name: visitor_registry
+  base: entity
+  entity: Guest
+  description: Guest profiles and membership information
+  primary_key:
+  - profile_ref
+  foreign_keys: []
+  columns:
+  - name: profile_ref
+    value_from: entity.Guest.id
+    description: Guest profile reference
+  - name: guest_label
+    value_from: entity.Guest.guest_name
+    description: Guest name
+  - name: residence_market
+    value_from: entity.Guest.country
+    description: Country of residence
+  - name: membership_band
+    value_from: entity.Guest.loyalty_tier
+    description: Loyalty scheme tier
+  - name: joined_loyalty_on
+    value_from: entity.Guest.member_since_date
+    description: Loyalty membership start date
+  - name: usual_channel
+    value_from: entity.Guest.preferred_booking_channel
+    description: Guest preferred reservation channel
+- name: stay_headers
+  base: entity
+  entity: Reservation
+  description: Reservation headers with assigned room and lead guest
+  primary_key:
+  - booking_ref
+  foreign_keys:
+  - column: primary_guest
+    references:
+      table: visitor_registry
+      column: profile_ref
+  - column: assigned_unit
+    references:
+      table: unit_directory
+      column: unit_key
+  columns:
+  - name: booking_ref
+    value_from: entity.Reservation.id
+    description: Reservation reference
+  - name: arrive_on
+    value_from: entity.Reservation.arrival_date
+    description: Booked arrival date
+  - name: length_nights
+    value_from: entity.Reservation.nights
+    description: Reserved nights
+  - name: party_size
+    value_from: entity.Reservation.guest_count
+    description: Number of guests
+  - name: stay_state
+    value_from: entity.Reservation.reservation_status
+    description: Reservation status
+  - name: notes_tag
+    value_from: entity.Reservation.special_request
+    description: Additional guest request
+  - name: primary_guest
+    value_from: relation.makes.source.Guest.id
+    description: Guest who made the reservation
+  - name: assigned_unit
+    value_from: relation.booksRoom.target.Room.id
+    description: Allocated room reference
+- name: stay_tariffs
+  base: relation
+  relation: booksRoom
+  description: Booked room pricing with relation-level occupancy values
+  primary_key:
+  - resv_key
+  - room_ref
+  foreign_keys:
+  - column: resv_key
+    references:
+      table: stay_headers
+      column: booking_ref
+  - column: room_ref
+    references:
+      table: unit_directory
+      column: unit_key
+  columns:
+  - name: resv_key
+    value_from: source.Reservation.id
+    description: Reservation reference
+  - name: room_ref
+    value_from: target.Room.id
+    description: Room reference
+  - name: charged_nightly_eur
+    value_from: relation.booksRoom.nightly_rate_eur
+    description: Contracted nightly tariff in EUR
+  - name: heads_reserved
+    value_from: relation.booksRoom.occupancy_count
+    description: Number of occupants on this booking relation
+  - name: room_category
+    value_from: target.Room.room_type
+    description: Room category repeated for booking extract
+- name: service_rate_sheet
+  base: relation
+  relation: offers
+  description: Available hotel services; service catalog fields repeated per property
+  primary_key:
+  - property_no
+  - extra_code
+  foreign_keys:
+  - column: property_no
+    references:
+      table: property_cards
+      column: property_ref
+  columns:
+  - name: property_no
+    value_from: source.Hotel.hotel_code
+    description: Hotel offering the service
+  - name: extra_code
+    value_from: target.Service.id
+    description: Extra service reference
+  - name: extra_label
+    value_from: target.Service.service_name
+    description: Service display name
+  - name: billing_group
+    value_from: target.Service.service_category
+    description: Service charging category
+  - name: standard_price
+    value_from: target.Service.standard_fee_eur
+    description: Standard service price in EUR
+- name: incidental_ledger
+  base: relation
+  relation: chargedFor
+  description: Extras charged against a reservation
+  primary_key:
+  - resv_no
+  - addon_ref
+  foreign_keys:
+  - column: resv_no
+    references:
+      table: stay_headers
+      column: booking_ref
+  columns:
+  - name: resv_no
+    value_from: source.Reservation.id
+    description: Reservation being charged
+  - name: addon_ref
+    value_from: target.Service.id
+    description: Additional service reference
+  - name: qty_used
+    value_from: relation.chargedFor.service_quantity
+    description: Units of the additional service
+  - name: line_charge
+    value_from: relation.chargedFor.billed_fee_eur
+    description: Billed amount in EUR
+  - name: line_description
+    value_from: target.Service.service_name
+    description: Service name copied onto bill
+- name: receipts_batch
+  base: entity
+  entity: Payment
+  description: Payment register with linked stay and paying guest
+  primary_key:
+  - settlement_id
+  foreign_keys:
+  - column: linked_stay
+    references:
+      table: stay_headers
+      column: booking_ref
+  - column: payer_profile
+    references:
+      table: visitor_registry
+      column: profile_ref
+  columns:
+  - name: settlement_id
+    value_from: entity.Payment.id
+    description: Payment identifier
+  - name: posted_dt
+    value_from: entity.Payment.payment_date
+    description: Payment posting date
+  - name: received_eur
+    value_from: entity.Payment.amount_eur
+    description: Payment amount in EUR
+  - name: tender_type
+    value_from: entity.Payment.payment_method
+    description: Payment method
+  - name: payment_state
+    value_from: entity.Payment.payment_status
+    description: Payment processing status
+  - name: denom
+    value_from: entity.Payment.currency
+    description: Payment currency
+  - name: linked_stay
+    value_from: relation.settles.target.Reservation.id
+    description: Reservation settled by payment
+  - name: payer_profile
+    value_from: relation.paidBy.target.Guest.id
+    description: Guest recorded as payer
+- name: amenity_eligibility
+  base: relation
+  relation: eligibleFor
+  description: Service eligibility entries by individual room
+  primary_key:
+  - unit_id
+  - extras_ref
+  foreign_keys:
+  - column: unit_id
+    references:
+      table: unit_directory
+      column: unit_key
+  columns:
+  - name: unit_id
+    value_from: source.Room.id
+    description: Room allowed to use service
+  - name: extras_ref
+    value_from: target.Service.id
+    description: Eligible service reference
+  - name: guest_class
+    value_from: source.Room.room_type
+    description: Room category
+  - name: service_group
+    value_from: target.Service.service_category
+    description: Service type
+- name: favourite_locations
+  base: relation
+  relation: prefersHotel
+  description: Guest-stated preferred hotel locations
+  primary_key:
+  - client_no
+  - fav_site_ref
+  foreign_keys:
+  - column: client_no
+    references:
+      table: visitor_registry
+      column: profile_ref
+  - column: fav_site_ref
+    references:
+      table: property_cards
+      column: property_ref
+  columns:
+  - name: client_no
+    value_from: source.Guest.id
+    description: Guest profile reference
+  - name: fav_site_ref
+    value_from: target.Hotel.hotel_code
+    description: Preferred hotel code
+  - name: client_tier
+    value_from: source.Guest.loyalty_tier
+    description: Current guest loyalty tier
+  - name: site_city
+    value_from: target.Hotel.city
+    description: Preferred hotel city

@@ -1,0 +1,217 @@
+# ERP-QA scenario 5: IT Service & Asset Management
+# Scope: enterprise departments, employees, assigned IT assets, vendors,
+# support teams, incident tickets, and their resolution workflows.
+# Counting: an `id` block is one entity property; each `parent` is one relation.
+# Expected: 6 entities, 10 relations (8 explicit + 2 parent),
+#           35 entity properties (30 explicit + 5 generated IDs),
+#           5 relation properties.
+# Relations are listed in dependency order for consistency anchors.
+
+entities:
+  Department:
+    count: 5
+    properties:
+      department_code:
+        unique: true
+        values: [DEP_IT, DEP_FIN, DEP_HR, DEP_SALES, DEP_OPS, DEP_RND]
+      department_name:             # aligned: DEP_IT -> Information_Technology, ...
+        aligned_with: department_code
+        values: [Information_Technology, Finance, Human_Resources, Sales, Operations, Research_And_Development]
+      business_unit:
+        values: [Corporate, Commercial, Engineering, Shared_Services]
+      location:
+        values: [Vienna, Graz, Linz, Salzburg, Remote]
+      annual_it_budget_eur:
+        type: integer
+        range: [15000, 250000]
+      cost_center:                 # aligned: one cost center per department
+        aligned_with: department_code
+        values: [CC100, CC200, CC300, CC400, CC500, CC600]
+
+  Employee:
+    parent: Department
+    count_per_parent: [2, 3]
+    id:
+      prefix: IE
+      digits: 4
+    properties:
+      employee_name:
+        values: [Amir_Weber, Beate_Huber, Clara_Meyer, Daniel_Rossi, Eva_Fischer, Felix_Novak, Grace_Klein, Hans_Bauer, Iris_Wagner, Jan_Steiner, Klara_Wolf, Leo_Gruber]
+      job_title:
+        values: [Analyst, Coordinator, Engineer, Administrator, Technician, Manager]
+      employment_status:
+        values: [Full_Time, Part_Time, Contractor]
+      hire_date:
+        type: date
+        range: ['2018-01-01', '2025-12-31']
+      office_location:
+        values: [Vienna, Graz, Linz, Salzburg, Remote]
+
+  ITAsset:
+    parent: Department
+    count_per_parent: [3, 4]
+    id:
+      prefix: IA
+      digits: 4
+    properties:
+      asset_type:
+        values: [Laptop, Desktop, Monitor, Server, Printer, Network_Switch]
+      model_name:
+        values: [Model_Alpha, Model_Beta, Model_Gamma, Model_Delta, Model_Epsilon]
+      warranty_end_date:
+        type: date
+        range: ['2025-01-01', '2029-12-31']
+      purchase_cost_eur:
+        type: integer
+        range: [100, 8000]
+      asset_status:
+        values: [Available, Assigned, Under_Repair, Retired]
+
+  ServiceTicket:
+    count: 30
+    id:
+      prefix: IT
+      digits: 5
+    properties:
+      subject:
+        values: [Cannot_Log_In, Slow_Computer, VPN_Error, Printer_Issue, Monitor_Fault, Network_Outage, Software_Install, Access_Request, Battery_Failure, Email_Error]
+      issue_category:
+        values: [Account, Hardware, Network, Software, Access]
+      created_date:
+        type: date
+        range: ['2024-01-01', '2025-12-31']
+      priority:
+        values: [Low, Medium, High, Critical]
+      ticket_status:
+        values: [Open, In_Progress, Resolved, Closed]
+
+  SupportTeam:
+    count: 4
+    id:
+      prefix: ST
+      digits: 3
+    properties:
+      team_name:
+        values: [Service_Desk, Workplace_Support, Infrastructure, Identity_Access, Application_Support]
+      support_tier:
+        values: [Tier_1, Tier_2, Tier_3]
+      shift:
+        values: [Day, Evening, Rotating]
+      response_target_hours:
+        type: integer
+        range: [1, 48]
+
+  Vendor:
+    count: 5
+    id:
+      prefix: IV
+      digits: 3
+    properties:
+      vendor_name:
+        values: [Alpine_IT, Euro_Hardware, Danube_Systems, Northstar_Technology, Metro_Devices, Central_Procurement]
+      country:
+        values: [Austria, Germany, Netherlands, Czechia, Poland]
+      contract_start_date:
+        type: date
+        range: ['2019-01-01', '2025-12-31']
+      contract_level:
+        values: [Standard, Preferred, Strategic]
+      vendor_rating:
+        type: integer
+        range: [1, 5]
+
+relations:
+  - name: supplies
+    from: Vendor
+    to: ITAsset
+    from_cardinality:
+      min: 1
+    to_cardinality:
+      min: 1
+      max: 1
+
+  - name: supports
+    from: SupportTeam
+    to: Department
+    from_cardinality:
+      min: 1
+      max: 3
+    to_cardinality:
+      min: 0
+
+  - name: memberOf
+    from: Employee
+    to: SupportTeam
+    from_cardinality:
+      min: 0
+      max: 1
+    to_cardinality:
+      min: 1
+
+  - name: assignedTo
+    from: ITAsset
+    to: Employee
+    from_cardinality:
+      min: 0
+      max: 1
+    to_cardinality:
+      min: 0
+      max: 3
+    # The asset and its assignee must belong to the same department.
+    consistency:
+      source_anchor: parent_Department
+      target_anchor: parent_Department
+    properties:
+      assignment_date:
+        type: date
+        range: ['2023-01-01', '2025-12-31']
+      assignment_status:
+        values: [Active, On_Loan, Returned]
+
+  - name: submits
+    from: Employee
+    to: ServiceTicket
+    from_cardinality:
+      min: 0
+      max: 4
+    to_cardinality:
+      min: 1
+      max: 1
+
+  - name: concerns
+    from: ServiceTicket
+    to: ITAsset
+    from_cardinality:
+      min: 0
+      max: 1
+
+  - name: handledBy
+    from: ServiceTicket
+    to: SupportTeam
+    from_cardinality:
+      min: 1
+      max: 1
+    properties:
+      assignment_priority:
+        values: [Low, Medium, High, Critical]
+      sla_hours:
+        type: integer
+        range: [1, 72]
+
+  - name: resolves
+    from: Employee
+    to: ServiceTicket
+    from_cardinality:
+      min: 0
+      max: 5
+    to_cardinality:
+      min: 0
+      max: 1
+    # The resolver must be a member of the ticket's handling support team.
+    consistency:
+      source_anchor: memberOf.target
+      target_anchor: handledBy.target
+    properties:
+      resolution_minutes:
+        type: integer
+        range: [10, 600]

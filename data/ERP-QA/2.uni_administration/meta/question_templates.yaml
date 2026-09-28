@@ -1,0 +1,603 @@
+# question_templates.yaml -- university-management scenario.
+# Each entry pairs a Cypher query template with its natural-language question.
+# Placeholders are shared between the two: $param in Cypher <-> {param} in NL.
+#
+# Conventions (differences from scenario1, each fixing a gold-answer defect):
+#   * Retrieval returns DISTINCT values, so multi-path matches are not repeated.
+#   * Dates are stored as ISO strings, so year filters use STARTS WITH rather
+#     than comparing a string against date(...) (which always yields null).
+#   * Relation properties are read from the relationship variable
+#     (r.assigned_date), not from the target node.
+#   * Superlatives return every entity tied for the maximum and carry
+#     `unique_answer: true`, so the generator resamples instead of letting
+#     ORDER BY ... LIMIT 1 pick an arbitrary winner among ties.
+
+placeholders:
+  faculty_name:    [Faculty, faculty_name]
+  department_name: [Department, department_name]
+  professor_id:    [Professor, id]
+  course_id:       [Course, id]
+  section_id:      [CourseSection, id]
+
+templates:
+
+  # ==================== Retrieval (1-hop) ====================
+  - type: 1-hop retrieval
+    cypher: |
+      MATCH (p:Professor {id: $professor_id})-[:teaches]->(c:Course)
+      RETURN DISTINCT c.id AS answer
+    nl: "Which courses does the professor {professor_id} teach?"
+
+  - type: 1-hop retrieval
+    cypher: |
+      MATCH (f:Faculty {faculty_name: $faculty_name})-[:has_department]->(d:Department)
+      RETURN DISTINCT d.department_name AS answer
+    nl: "Which departments belong to the faculty {faculty_name}?"
+
+  - type: 1-hop retrieval
+    cypher: |
+      MATCH (f:Faculty {faculty_name: $faculty_name})-[:hasLab]->(l:Lab)
+      RETURN DISTINCT l.id AS answer
+    nl: "Which labs are owned by the faculty {faculty_name}?"
+
+  - type: 1-hop retrieval
+    cypher: |
+      MATCH (p:Professor {id: $professor_id})
+      RETURN p.research_funding AS answer
+    nl: "What is the research funding of professor {professor_id}?"
+
+  - type: 1-hop retrieval
+    cypher: |
+      MATCH (s:CourseSection {id: $section_id})
+      RETURN s.start_date AS answer
+    nl: "What is the start date of course section {section_id}?"
+
+  - type: 1-hop retrieval
+    cypher: |
+      MATCH (p:Professor {id: $professor_id})
+      RETURN p.academic_rank AS answer
+    nl: "What is the academic rank of professor {professor_id}?"
+
+  - type: 1-hop retrieval
+    cypher: |
+      MATCH (p:Professor {id: $professor_id})-[:managesLab]->(l:Lab)
+      RETURN DISTINCT l.id AS answer
+    nl: "Which labs does the professor {professor_id} manage?"
+
+  - type: 1-hop retrieval
+    cypher: |
+      MATCH (s:CourseSection {id: $section_id})-[:sectionOf]->(c:Course)
+      RETURN DISTINCT c.id AS answer
+    nl: "Which course is course section {section_id} a section of?"
+
+  - type: 1-hop retrieval
+    cypher: |
+      MATCH (s:CourseSection {id: $section_id})-[:offeredBy]->(f:Faculty)
+      RETURN DISTINCT f.faculty_name AS answer
+    nl: "Which faculty offers course section {section_id}?"
+
+  - type: 1-hop retrieval
+    cypher: |
+      MATCH (s:CourseSection {id: $section_id})
+      RETURN s.enrolled_students AS answer
+    nl: "How many students are enrolled in course section {section_id}?"
+
+  - type: 1-hop retrieval
+    cypher: |
+      MATCH (s:CourseSection)-[:sectionOf]->(c:Course {id: $course_id})
+      RETURN DISTINCT s.id AS answer
+    nl: "Which course sections are offered for course {course_id}?"
+
+  # ==================== Retrieval (2-hop) ====================
+  - type: 2-hop retrieval
+    cypher: |
+      MATCH (f:Faculty {faculty_name: $faculty_name})-[:has_department]->(d:Department)-[:has_professor]->(p:Professor)
+      RETURN DISTINCT p.id AS answer
+    nl: "Which professors work in the faculty {faculty_name}?"
+
+  - type: 2-hop retrieval
+    cypher: |
+      MATCH (d:Department {department_name: $department_name})-[:has_professor]->(p:Professor)-[:teaches]->(c:Course)
+      RETURN DISTINCT c.id AS answer
+    nl: "Which courses are taught by professors in the department {department_name}?"
+
+  - type: 2-hop retrieval
+    cypher: |
+      MATCH (d:Department {department_name: $department_name})-[:has_professor]->(p:Professor)-[:managesLab]->(l:Lab)
+      RETURN DISTINCT l.id AS answer
+    nl: "Which labs are managed by professors in the department {department_name}?"
+
+  - type: 2-hop retrieval
+    cypher: |
+      MATCH (d:Department)-[:has_professor]->(p:Professor)-[:teaches]->(c:Course {id: $course_id})
+      RETURN DISTINCT d.department_name AS answer
+    nl: "Which departments have professors who teach course {course_id}?"
+
+  - type: 2-hop retrieval
+    cypher: |
+      MATCH (f:Faculty)-[:has_department]->(d:Department)-[:has_professor]->(p:Professor {id: $professor_id})
+      RETURN DISTINCT f.faculty_name AS answer
+    nl: "Which faculty does the department of professor {professor_id} belong to?"
+
+  - type: 2-hop retrieval
+    cypher: |
+      MATCH (s:CourseSection {id: $section_id})-[:sectionOf]->(c:Course)<-[:teaches]-(p:Professor)
+      RETURN DISTINCT p.id AS answer
+    nl: "Which professors teach the course of course section {section_id}?"
+
+  - type: 2-hop retrieval
+    cypher: |
+      MATCH (p:Professor {id: $professor_id})-[:teaches]->(c:Course)<-[:sectionOf]-(s:CourseSection)
+      RETURN DISTINCT s.id AS answer
+    nl: "Which course sections are offered for courses taught by professor {professor_id}?"
+
+  - type: 2-hop retrieval
+    cypher: |
+      MATCH (c:Course {id: $course_id})<-[:sectionOf]-(s:CourseSection)-[:offeredBy]->(f:Faculty)
+      RETURN DISTINCT f.faculty_name AS answer
+    nl: "Which faculties offer sections of course {course_id}?"
+
+  - type: 2-hop retrieval
+    cypher: |
+      MATCH (f:Faculty {faculty_name: $faculty_name})-[:hasLab]->(l:Lab)<-[:managesLab]-(p:Professor)
+      RETURN DISTINCT p.id AS answer
+    nl: "Which professors manage labs owned by the faculty {faculty_name}?"
+
+  - type: 2-hop retrieval
+    cypher: |
+      MATCH (f:Faculty {faculty_name: $faculty_name})<-[:offeredBy]-(s:CourseSection)-[:sectionOf]->(c:Course)
+      RETURN DISTINCT c.id AS answer
+    nl: "Which courses have sections offered by the faculty {faculty_name}?"
+
+  # ==================== Retrieval (3-hop) ====================
+  - type: 3-hop retrieval
+    cypher: |
+      MATCH (f:Faculty {faculty_name: $faculty_name})-[:has_department]->(d:Department)-[:has_professor]->(p:Professor)-[:teaches]->(c:Course)
+      RETURN DISTINCT c.id AS answer
+    nl: "Which courses are taught by professors in the faculty {faculty_name}?"
+
+  - type: 3-hop retrieval
+    cypher: |
+      MATCH (f:Faculty {faculty_name: $faculty_name})-[:has_department]->(d:Department)-[:has_professor]->(p:Professor)-[:managesLab]->(l:Lab)
+      RETURN DISTINCT l.id AS answer
+    nl: "Which labs are managed by professors in the faculty {faculty_name}?"
+
+  - type: 3-hop retrieval
+    cypher: |
+      MATCH (d:Department {department_name: $department_name})-[:has_professor]->(p:Professor)-[:teaches]->(c:Course)<-[:sectionOf]-(s:CourseSection)
+      RETURN DISTINCT s.id AS answer
+    nl: "Which course sections are for courses taught by professors in the department {department_name}?"
+
+  - type: 3-hop retrieval
+    cypher: |
+      MATCH (f:Faculty {faculty_name: $faculty_name})-[:has_department]->(d:Department)-[:has_professor]->(p:Professor)-[:teaches]->(c:Course {id: $course_id})
+      RETURN DISTINCT p.id AS answer
+    nl: "Which professors in the faculty {faculty_name} teach course {course_id}?"
+
+  - type: 3-hop retrieval
+    cypher: |
+      MATCH (s:CourseSection {id: $section_id})-[:sectionOf]->(c:Course)<-[:teaches]-(p:Professor)<-[:has_professor]-(d:Department)
+      RETURN DISTINCT d.department_name AS answer
+    nl: "Which departments have professors who teach the course of course section {section_id}?"
+
+  - type: 3-hop retrieval
+    cypher: |
+      MATCH (p:Professor {id: $professor_id})-[:teaches]->(c:Course)<-[:sectionOf]-(s:CourseSection)-[:offeredBy]->(f:Faculty)
+      RETURN DISTINCT f.faculty_name AS answer
+    nl: "Which faculties offer sections of courses taught by professor {professor_id}?"
+
+  - type: 3-hop retrieval
+    cypher: |
+      MATCH (f:Faculty {faculty_name: $faculty_name})-[:hasLab]->(l:Lab)<-[:managesLab]-(p:Professor)<-[:has_professor]-(d:Department)
+      RETURN DISTINCT d.department_name AS answer
+    nl: "Which departments have professors managing labs owned by the faculty {faculty_name}?"
+
+  - type: 3-hop retrieval
+    cypher: |
+      MATCH (f:Faculty {faculty_name: $faculty_name})-[:has_department]->(d:Department)-[:has_professor]->(p:Professor)-[:teaches]->(c:Course)<-[:sectionOf]-(s:CourseSection)
+      RETURN DISTINCT s.id AS answer
+    nl: "Which course sections are for courses taught by professors in the faculty {faculty_name}?"
+
+  - type: 3-hop retrieval
+    cypher: |
+      MATCH (d:Department {department_name: $department_name})-[:has_professor]->(p:Professor)-[:teaches]->(c:Course)<-[:sectionOf]-(s:CourseSection)-[:offeredBy]->(f:Faculty)
+      WITH DISTINCT f
+      RETURN f.faculty_name AS answer
+    nl: "Which faculties offer sections of courses taught by professors in the department {department_name}?"
+
+  # ==================== Flat Aggregation (Count) ====================
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (f:Faculty {faculty_name: $faculty_name})-[:has_department]->(d:Department)
+      RETURN count(DISTINCT d) AS answer
+    nl: "How many departments does the faculty {faculty_name} have?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (d:Department {department_name: $department_name})-[:has_professor]->(p:Professor)
+      RETURN count(DISTINCT p) AS answer
+    nl: "How many professors does the department {department_name} have?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (f:Faculty {faculty_name: $faculty_name})-[:has_department]->(d:Department)-[:has_professor]->(p:Professor)
+      RETURN count(DISTINCT p) AS answer
+    nl: "How many professors are there in the faculty {faculty_name}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (f:Faculty {faculty_name: $faculty_name})-[:hasLab]->(l:Lab)
+      RETURN count(DISTINCT l) AS answer
+    nl: "How many labs are owned by the faculty {faculty_name}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (p:Professor {id: $professor_id})-[:teaches]->(c:Course)
+      RETURN count(DISTINCT c) AS answer
+    nl: "How many courses does the professor {professor_id} teach?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (f:Faculty {faculty_name: $faculty_name})<-[:offeredBy]-(s:CourseSection)
+      RETURN count(DISTINCT s) AS answer
+    nl: "How many course sections are offered by the faculty {faculty_name}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (s:CourseSection)-[:sectionOf]->(c:Course {id: $course_id})
+      RETURN count(DISTINCT s) AS answer
+    nl: "How many course sections are there for course {course_id}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (d:Department {department_name: $department_name})-[:has_professor]->(p:Professor)-[:teaches]->(c:Course)
+      RETURN count(DISTINCT c) AS answer
+    nl: "How many distinct courses are taught by professors in the department {department_name}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (d:Department {department_name: $department_name})-[:has_professor]->(p:Professor)-[:managesLab]->(l:Lab)
+      RETURN count(DISTINCT l) AS answer
+    nl: "How many labs are managed by professors in the department {department_name}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (l:Lab)
+      WHERE NOT (l)<-[:managesLab]-(:Professor)
+      RETURN count(l) AS answer
+    nl: "How many labs are not managed by any professor?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (f:Faculty {faculty_name: $faculty_name})-[:has_department]->(d:Department)-[:has_professor]->(p:Professor)-[:managesLab]->(l:Lab)
+      RETURN count(DISTINCT p) AS answer
+    nl: "How many professors in the faculty {faculty_name} manage at least one lab?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (f:Faculty {faculty_name: $faculty_name})<-[:offeredBy]-(s:CourseSection)
+      WHERE s.start_date STARTS WITH '2024'
+      RETURN count(DISTINCT s) AS answer
+    nl: "How many course sections offered by the faculty {faculty_name} started in the year 2024?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (f:Faculty {faculty_name: $faculty_name})-[:has_department]->(d:Department)-[:has_professor]->(p:Professor)-[:teaches]->(c:Course)
+      RETURN count(DISTINCT c) AS answer
+    nl: "How many distinct courses are taught by professors in the faculty {faculty_name}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (f:Faculty {faculty_name: $faculty_name})-[:hasLab]->(l:Lab)
+      WHERE l.lab_status = 'Active'
+      RETURN count(DISTINCT l) AS answer
+    nl: "How many active labs are owned by the faculty {faculty_name}?"
+
+  # ==================== Flat Aggregation (Sum / Avg) ====================
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (d:Department {department_name: $department_name})-[:has_professor]->(p:Professor)
+      RETURN sum(p.research_funding) AS answer
+    nl: "What is the total research funding of all professors in the department {department_name}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (f:Faculty {faculty_name: $faculty_name})-[:has_department]->(d:Department)-[:has_professor]->(p:Professor)
+      RETURN sum(p.research_funding) AS answer
+    nl: "What is the total research funding of all professors in the faculty {faculty_name}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (p:Professor)-[:teaches]->(c:Course {id: $course_id})
+      RETURN sum(p.research_funding) AS answer
+    nl: "What is the total research funding of the professors who teach course {course_id}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (f:Faculty {faculty_name: $faculty_name})<-[:offeredBy]-(s:CourseSection)
+      RETURN sum(s.enrolled_students) AS answer
+    nl: "What is the total number of students enrolled in course sections offered by the faculty {faculty_name}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (s:CourseSection)-[:sectionOf]->(c:Course {id: $course_id})
+      RETURN sum(s.enrolled_students) AS answer
+    nl: "What is the total number of students enrolled in sections of course {course_id}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (f:Faculty {faculty_name: $faculty_name})<-[:offeredBy]-(s:CourseSection)
+      RETURN sum(s.dropped_students) AS answer
+    nl: "What is the total number of dropped students in course sections offered by the faculty {faculty_name}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (s:CourseSection)-[:sectionOf]->(c:Course {id: $course_id})
+      RETURN sum(s.dropped_students) AS answer
+    nl: "What is the total number of dropped students in sections of course {course_id}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (p:Professor {id: $professor_id})-[:teaches]->(c:Course)<-[:sectionOf]-(s:CourseSection)
+      WITH DISTINCT s
+      RETURN sum(s.enrolled_students) AS answer
+    nl: "What is the total number of students enrolled in sections of courses taught by professor {professor_id}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (s:CourseSection)
+      WHERE s.start_date STARTS WITH '2025'
+      RETURN sum(s.enrolled_students) AS answer
+    nl: "What is the total number of students enrolled in all course sections that started in the year 2025?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (d:Department {department_name: $department_name})-[:has_professor]->(p:Professor)
+      RETURN round(avg(p.research_funding), 2) AS answer
+    nl: "What is the average research funding of professors in the department {department_name}?"
+
+  # ==================== Nested Aggregation ====================
+  # Global superlatives
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (f:Faculty)-[:hasLab]->(l:Lab)
+      WITH f, count(l) AS score
+      WITH collect({k: f.faculty_name, v: score}) AS rows, max(score) AS best
+      UNWIND rows AS r
+      WITH r, best WHERE r.v = best
+      RETURN r.k AS answer
+    nl: "Which faculty owns the most labs?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (f:Faculty)-[:has_department]->(d:Department)
+      WITH f, count(d) AS score
+      WITH collect({k: f.faculty_name, v: score}) AS rows, max(score) AS best
+      UNWIND rows AS r
+      WITH r, best WHERE r.v = best
+      RETURN r.k AS answer
+    nl: "Which faculty has the most departments?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (f:Faculty)-[:has_department]->(d:Department)-[:has_professor]->(p:Professor)
+      WITH f, count(p) AS score
+      WITH collect({k: f.faculty_name, v: score}) AS rows, max(score) AS best
+      UNWIND rows AS r
+      WITH r, best WHERE r.v = best
+      RETURN r.k AS answer
+    nl: "Which faculty has the most professors?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (c:Course)<-[:teaches]-(p:Professor)
+      WITH c, count(p) AS score
+      WITH collect({k: c.id, v: score}) AS rows, max(score) AS best
+      UNWIND rows AS r
+      WITH r, best WHERE r.v = best
+      RETURN r.k AS answer
+    nl: "Which course is taught by the most professors?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (p:Professor)-[r0:managesLab]->(l:Lab)
+      WITH p, max(r0.assigned_date) AS score
+      WITH collect({k: p.id, v: score}) AS rows, max(score) AS best
+      UNWIND rows AS r
+      WITH r, best WHERE r.v = best
+      RETURN r.k AS answer
+    nl: "Which professor was most recently assigned to manage a lab?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (f:Faculty)<-[:offeredBy]-(s:CourseSection)
+      WITH f, count(s) AS score
+      WITH collect({k: f.faculty_name, v: score}) AS rows, max(score) AS best
+      UNWIND rows AS r
+      WITH r, best WHERE r.v = best
+      RETURN r.k AS answer
+    nl: "Which faculty offers the most course sections?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (c:Course)<-[:sectionOf]-(s:CourseSection)
+      WITH c, count(s) AS score
+      WITH collect({k: c.id, v: score}) AS rows, max(score) AS best
+      UNWIND rows AS r
+      WITH r, best WHERE r.v = best
+      RETURN r.k AS answer
+    nl: "Which course has the most course sections?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (f:Faculty)-[:has_department]->(d:Department)-[:has_professor]->(p:Professor)
+      WITH f, sum(p.research_funding) AS score
+      WITH collect({k: f.faculty_name, v: score}) AS rows, max(score) AS best
+      UNWIND rows AS r
+      WITH r, best WHERE r.v = best
+      RETURN r.k AS answer
+    nl: "Which faculty has the highest total research funding?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (d:Department)-[:has_professor]->(p:Professor)
+      WITH d, avg(p.research_funding) AS score
+      WITH collect({k: d.department_name, v: score}) AS rows, max(score) AS best
+      UNWIND rows AS r
+      WITH r, best WHERE r.v = best
+      RETURN r.k AS answer
+    nl: "Which department has the highest average research funding per professor?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (f:Faculty)<-[:offeredBy]-(s:CourseSection)
+      WITH f, sum(s.dropped_students) AS score
+      WITH collect({k: f.faculty_name, v: score}) AS rows, max(score) AS best
+      UNWIND rows AS r
+      WITH r, best WHERE r.v = best
+      RETURN r.k AS answer
+    nl: "Which faculty has the highest total number of dropped students across its course sections?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (c:Course)<-[:sectionOf]-(s:CourseSection)
+      WITH c, sum(s.enrolled_students) AS score
+      WITH collect({k: c.id, v: score}) AS rows, max(score) AS best
+      UNWIND rows AS r
+      WITH r, best WHERE r.v = best
+      RETURN r.k AS answer
+    nl: "Which course has the highest total enrollment across its course sections?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (f:Faculty)-[:has_department]->(d:Department)-[:has_professor]->(p:Professor)-[:teaches]->(c:Course)
+      WITH f, count(DISTINCT c) AS score
+      WITH collect({k: f.faculty_name, v: score}) AS rows, max(score) AS best
+      UNWIND rows AS r
+      WITH r, best WHERE r.v = best
+      RETURN r.k AS answer
+    nl: "Which faculty teaches the most diverse set of courses?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (d:Department)-[:has_professor]->(p:Professor)
+      WITH d, sum(p.research_funding) AS score
+      WITH collect({k: d.department_name, v: score}) AS rows, max(score) AS best
+      UNWIND rows AS r
+      WITH r, best WHERE r.v = best
+      RETURN r.k AS answer
+    nl: "Which department has the highest total research funding?"
+
+  # Scoped superlatives
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (d:Department {department_name: $department_name})-[:has_professor]->(p:Professor)
+      WITH p, p.research_funding AS score
+      WITH collect({k: p.id, v: score}) AS rows, max(score) AS best
+      UNWIND rows AS r
+      WITH r, best WHERE r.v = best
+      RETURN r.k AS answer
+    nl: "Which professor in the department {department_name} has the highest research funding?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (f:Faculty {faculty_name: $faculty_name})-[:has_department]->(d:Department)-[:has_professor]->(p:Professor)
+      WITH p, p.research_funding AS score
+      WITH collect({k: p.id, v: score}) AS rows, max(score) AS best
+      UNWIND rows AS r
+      WITH r, best WHERE r.v = best
+      RETURN r.k AS answer
+    nl: "Which professor in the faculty {faculty_name} has the highest research funding?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (f:Faculty {faculty_name: $faculty_name})-[:has_department]->(d:Department)-[:has_professor]->(p:Professor)
+      WITH d, sum(p.research_funding) AS score
+      WITH collect({k: d.department_name, v: score}) AS rows, max(score) AS best
+      UNWIND rows AS r
+      WITH r, best WHERE r.v = best
+      RETURN r.k AS answer
+    nl: "Which department in the faculty {faculty_name} has the highest total research funding?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (s:CourseSection)-[:sectionOf]->(c:Course {id: $course_id})
+      WITH s, s.enrolled_students AS score
+      WITH collect({k: s.id, v: score}) AS rows, max(score) AS best
+      UNWIND rows AS r
+      WITH r, best WHERE r.v = best
+      RETURN r.k AS answer
+    nl: "Which course section of course {course_id} has the most enrolled students?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (f:Faculty {faculty_name: $faculty_name})<-[:offeredBy]-(s:CourseSection)
+      WITH s, s.enrolled_students AS score
+      WITH collect({k: s.id, v: score}) AS rows, max(score) AS best
+      UNWIND rows AS r
+      WITH r, best WHERE r.v = best
+      RETURN r.k AS answer
+    nl: "Which course section offered by the faculty {faculty_name} has the most enrolled students?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (f:Faculty {faculty_name: $faculty_name})<-[:offeredBy]-(s:CourseSection)-[:sectionOf]->(c:Course)
+      WITH c, sum(s.enrolled_students) AS score
+      WITH collect({k: c.id, v: score}) AS rows, max(score) AS best
+      UNWIND rows AS r
+      WITH r, best WHERE r.v = best
+      RETURN r.k AS answer
+    nl: "Which course has the highest total enrollment across sections offered by the faculty {faculty_name}?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (s:CourseSection)-[:sectionOf]->(c:Course {id: $course_id})
+      WHERE s.enrolled_students > 0
+      WITH s, toFloat(s.dropped_students) / s.enrolled_students AS score
+      WITH collect({k: s.id, v: score}) AS rows, max(score) AS best
+      UNWIND rows AS r
+      WITH r, best WHERE r.v = best
+      RETURN r.k AS answer
+    nl: "Which course section of course {course_id} has the highest ratio of dropped to enrolled students?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (f:Faculty {faculty_name: $faculty_name})<-[:offeredBy]-(s:CourseSection)
+      WITH s, s.dropped_students AS score
+      WITH collect({k: s.id, v: score}) AS rows, max(score) AS best
+      UNWIND rows AS r
+      WITH r, best WHERE r.v = best
+      RETURN r.k AS answer
+    nl: "Which course section offered by the faculty {faculty_name} has the most dropped students?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (p:Professor)-[:teaches]->(c:Course {id: $course_id})
+      WITH p, p.research_funding AS score
+      WITH collect({k: p.id, v: score}) AS rows, max(score) AS best
+      UNWIND rows AS r
+      WITH r, best WHERE r.v = best
+      RETURN r.k AS answer
+    nl: "Among the professors who teach course {course_id}, which one has the highest research funding?"

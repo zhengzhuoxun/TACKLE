@@ -1,0 +1,200 @@
+# University-management scenario, structurally parallel to scenario1
+# (manufacturing):
+#
+#   manufacturing          university
+#   -------------          ----------
+#   Plant                  Faculty          (root, natural key)
+#   Department             Department       (child of the root, natural key)
+#   Machine                Professor        (child of Department, generated id)
+#   Product                Course
+#   Part                   Lab
+#   ProductionOrder        CourseSection
+#   produce                teaches
+#   produceAt              offeredBy
+#   forProduct             sectionOf
+#   hasPart                hasLab
+#   usePart                managesLab
+#
+# Faculty and Department names use `unique: true`, so every name identifies
+# exactly one node (Cypher templates match departments by bare name).
+#
+# Relations below are generated in the order they are listed; every
+# cardinality and consistency rule is enforced and checked by
+# generate_instance.py (it fails loudly instead of emitting bad data).
+
+entities:
+
+  Faculty:
+    count: 6
+    properties:
+      faculty_name:
+        unique: true
+        values:
+          - Engineering
+          - Natural_Sciences
+          - Medicine
+          - Law
+          - Business
+          - Humanities
+          - Social_Sciences
+          - Architecture
+
+  Department:
+    parent: Faculty
+    count_per_parent: [3, 5]
+    properties:
+      department_name:
+        unique: true
+        values:
+          - Computer_Science
+          - Electrical_Engineering
+          - Mechanical_Engineering
+          - Civil_Engineering
+          - Chemical_Engineering
+          - Mathematics
+          - Physics
+          - Chemistry
+          - Biology
+          - Geosciences
+          - Anatomy
+          - Pharmacology
+          - Neuroscience
+          - Public_Health
+          - Civil_Law
+          - Criminal_Law
+          - International_Law
+          - Finance
+          - Marketing
+          - Accounting
+          - Management
+          - History
+          - Philosophy
+          - Linguistics
+          - Literature
+          - Economics
+          - Psychology
+          - Sociology
+          - Political_Science
+          - Urban_Planning
+          - Interior_Design
+          - Landscape_Architecture
+
+  Professor:
+    parent: Department
+    count_per_parent: [2, 4]
+    id:
+      prefix: P
+      digits: 3
+    properties:
+      academic_rank:
+        values:
+          - Lecturer
+          - Assistant_Professor
+          - Associate_Professor
+          - Full_Professor
+      research_funding:
+        type: integer
+        range: [20000, 500000]
+
+  Course:
+    count: 30
+    id:
+      prefix: C
+      digits: 3
+
+  Lab:
+    count: 45
+    id:
+      prefix: L
+      digits: 3
+    properties:
+      lab_type:
+        values:
+          - Computing
+          - Chemistry
+          - Biology
+          - Physics
+          - Robotics
+      lab_status:
+        values:
+          - Active
+          - Under_Renovation
+          - Decommissioned
+
+  CourseSection:
+    count: 80
+    id:
+      prefix: S
+      digits: 4
+    properties:
+      start_date:
+        type: date
+        range: ["2024-01-01", "2025-12-31"]
+      enrolled_students:
+        type: integer
+        range: [20, 300]
+      dropped_students:
+        type: integer
+        range: [0, 25]
+
+# --------------------- Relations (non-hierarchical edges) ---------------------
+# from_cardinality {min, max}: how many targets each source has.
+# to_cardinality   {min, max}: how many sources each target has.
+#   (min defaults to 0; a missing/null max means unlimited)
+# consistency: source and target must share an anchor value. An anchor path is
+#   a chain of `<relation>.source` / `<relation>.target` steps (relations listed
+#   EARLIER in this file) optionally ending in a field name.
+relations:
+  - name: teaches
+    from: Professor
+    to: Course
+    from_cardinality:
+      min: 1
+      max: 3
+    to_cardinality:
+      min: 1      # every course is taught by at least one professor
+
+  - name: offeredBy
+    from: CourseSection
+    to: Faculty
+    from_cardinality:
+      min: 1
+      max: 1      # exactly one faculty per section
+
+  - name: sectionOf
+    from: CourseSection
+    to: Course
+    from_cardinality:
+      min: 1
+      max: 1      # exactly one course per section
+    # A section is only of a course that some professor of the offering faculty teaches.
+    consistency:
+      source_anchor: offeredBy.target                # the section's faculty
+      target_anchor: teaches.source.parent_Faculty   # faculties whose professors teach the course
+
+  - name: hasLab
+    from: Faculty
+    to: Lab
+    from_cardinality:
+      min: 1      # every faculty owns at least one lab
+    to_cardinality:
+      min: 1
+      max: 1      # each lab belongs to exactly one faculty
+
+  - name: managesLab
+    from: Professor
+    to: Lab
+    from_cardinality:
+      min: 0
+      max: 2
+    to_cardinality:
+      min: 0
+      max: 1      # each lab has at most one managing professor
+    # A professor only manages labs owned by their own faculty.
+    consistency:
+      source_anchor: parent_Faculty                  # the professor's faculty
+      target_anchor: hasLab.source                   # the faculty that owns the lab
+    properties:
+      assigned_date:
+        type: date
+        range: ["2022-01-01", "2025-12-31"]

@@ -1,0 +1,27 @@
+# Entity counts and per-type question quota for the IT asset-management scenario.
+# Sized to be comparable with scenario 1 (~155 entities, 120 questions).
+# 6 departments with 4-6 employees and 5-8 IT assets each, 6 vendors,
+# 5 support teams, and 70 service tickets.
+# Department codes are unique (max 6 departments).
+# Quota: 24 per type; the tightest type (3-hop retrieval) supports ~32 at
+# these counts -- raise entity counts before raising the quota.
+entities:
+  Department:
+    count: 6
+  Employee:
+    count_per_parent: [4, 6]
+  ITAsset:
+    count_per_parent: [5, 8]
+  ServiceTicket:
+    count: 70
+  SupportTeam:
+    count: 5
+  Vendor:
+    count: 6
+
+question_types:
+  "1-hop retrieval": 24
+  "2-hop retrieval": 24
+  "3-hop retrieval": 24
+  "Flat Aggregation": 24
+  "Nested Aggregation": 24

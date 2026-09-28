@@ -1,0 +1,22 @@
+# 控制实体生成数量
+entities:
+  Plant:
+    count: 5                     
+  Department:
+    count_per_parent: [3, 4]      
+  Machine:
+    count_per_parent: [2, 5]
+  Product:
+    count: 17
+  Part:
+    count: 33
+  ProductionOrder:
+    count: 42
+
+
+question_types:
+  "1-hop retrieval": 21
+  "2-hop retrieval": 22
+  "3-hop retrieval": 17
+  "Flat Aggregation": 19
+  "Nested Aggregation": 25

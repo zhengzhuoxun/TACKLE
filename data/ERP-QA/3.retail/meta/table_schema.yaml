@@ -1,0 +1,323 @@
+# ERP-QA Table Schema: Retail Operations
+# Generator-side source-column provenance. Physical names are deliberately
+# heterogeneous and unaligned with KG concept/property names.
+# foreign_keys are construction metadata, not a relational schema given to QA models.
+tables:
+- name: branch_overview
+  base: entity
+  entity: Store
+  description: Branch reference data
+  primary_key:
+  - outlet_ref
+  foreign_keys: []
+  columns:
+  - name: outlet_ref
+    value_from: entity.Store.store_code
+    description: Branch reference code
+  - name: trade_label
+    value_from: entity.Store.store_name
+    description: Store trading name
+  - name: municipality
+    value_from: entity.Store.city
+    description: City of operation
+  - name: shopfloor_m2
+    value_from: entity.Store.floor_area_sqm
+    description: Customer-facing floor area in square metres
+  - name: launched_yr
+    value_from: entity.Store.opening_year
+    description: Year the branch opened
+  - name: site_class
+    value_from: entity.Store.store_format
+    description: Branch operating format
+- name: staffing_extract
+  base: entity
+  entity: Employee
+  description: Payroll export with branch assignment
+  primary_key:
+  - personnel_no
+  foreign_keys:
+  - column: location_key
+    references:
+      table: branch_overview
+      column: outlet_ref
+  columns:
+  - name: personnel_no
+    value_from: entity.Employee.id
+    description: Internal staff identifier
+  - name: location_key
+    value_from: entity.Employee.parent_Store
+    description: Assigned branch reference
+  - name: payroll_label
+    value_from: entity.Employee.employee_name
+    description: Staff member name
+  - name: duty_band
+    value_from: entity.Employee.role
+    description: Current job function
+  - name: contract_flag
+    value_from: entity.Employee.employment_status
+    description: Employment contract category
+  - name: joined_on
+    value_from: entity.Employee.hire_date
+    description: Start of employment
+  - name: monthly_goal
+    value_from: entity.Employee.monthly_sales_target_eur
+    description: Monthly sales target in EUR
+- name: assortment_feed
+  base: entity
+  entity: Product
+  description: Merchandise catalogue with pricing and lifecycle fields
+  primary_key:
+  - catalogue_ref
+  foreign_keys: []
+  columns:
+  - name: catalogue_ref
+    value_from: entity.Product.id
+    description: Product master reference
+  - name: shelf_label
+    value_from: entity.Product.product_name
+    description: Product display name
+  - name: merch_segment
+    value_from: entity.Product.category
+    description: Merchandise group
+  - name: maker_badge
+    value_from: entity.Product.brand
+    description: Brand label
+  - name: ticket_price
+    value_from: entity.Product.list_price_eur
+    description: Listed selling price in EUR
+  - name: landed_cost
+    value_from: entity.Product.unit_cost_eur
+    description: Unit acquisition cost in EUR
+  - name: listing_state
+    value_from: entity.Product.product_status
+    description: Product lifecycle status
+- name: trade_partners
+  base: entity
+  entity: Supplier
+  expand_relation: supplies
+  description: Partner list expanded by supplied merchandise
+  primary_key:
+  - partner_no
+  - distributed_sku
+  foreign_keys:
+  - column: distributed_sku
+    references:
+      table: assortment_feed
+      column: catalogue_ref
+  columns:
+  - name: partner_no
+    value_from: entity.Supplier.id
+    description: Vendor account reference
+  - name: legal_label
+    value_from: entity.Supplier.supplier_name
+    description: Registered supplier name
+  - name: origin_market
+    value_from: entity.Supplier.country
+    description: Supplier country
+  - name: lead_days
+    value_from: entity.Supplier.lead_time_days
+    description: Expected lead time in days
+  - name: quality_score
+    value_from: entity.Supplier.supplier_rating
+    description: Supplier rating
+  - name: distributed_sku
+    value_from: relation.supplies.target.Product.id
+    description: Merchandise supplied by this partner
+- name: loyalty_export
+  base: entity
+  entity: Customer
+  description: Customer membership register
+  primary_key:
+  - member_ref
+  foreign_keys: []
+  columns:
+  - name: member_ref
+    value_from: entity.Customer.id
+    description: Member account reference
+  - name: account_label
+    value_from: entity.Customer.customer_name
+    description: Customer name
+  - name: club_level
+    value_from: entity.Customer.loyalty_tier
+    description: Membership tier
+  - name: created_on
+    value_from: entity.Customer.registration_date
+    description: Registration date
+  - name: contact_route
+    value_from: entity.Customer.preferred_channel
+    description: Preferred ordering channel
+- name: pos_headers
+  base: entity
+  entity: SalesOrder
+  description: Transaction headers joining buyer, branch, and handling staff
+  primary_key:
+  - receipt_no
+  foreign_keys:
+  - column: shop_site
+    references:
+      table: branch_overview
+      column: outlet_ref
+  - column: buyer_no
+    references:
+      table: loyalty_export
+      column: member_ref
+  - column: cashier_tag
+    references:
+      table: staffing_extract
+      column: personnel_no
+  columns:
+  - name: receipt_no
+    value_from: entity.SalesOrder.id
+    description: Sales transaction identifier
+  - name: purchase_dt
+    value_from: entity.SalesOrder.order_date
+    description: Date of purchase
+  - name: fulfilment_flag
+    value_from: entity.SalesOrder.order_status
+    description: Transaction processing status
+  - name: promo_cut_pct
+    value_from: entity.SalesOrder.discount_pct
+    description: Order-level discount percentage
+  - name: sales_route
+    value_from: entity.SalesOrder.order_channel
+    description: Channel of sale
+  - name: shop_site
+    value_from: relation.processedAt.target.Store.store_code
+    description: Branch processing the order
+  - name: buyer_no
+    value_from: relation.places.source.Customer.id
+    description: Customer account for the purchase
+  - name: cashier_tag
+    value_from: relation.handledBy.target.Employee.id
+    description: Employee who handled the order
+- name: pos_lines
+  base: relation
+  relation: containsProduct
+  description: Individual sold-item records with line-level price and quantity
+  primary_key:
+  - txn_ref
+  - article_key
+  foreign_keys:
+  - column: txn_ref
+    references:
+      table: pos_headers
+      column: receipt_no
+  - column: article_key
+    references:
+      table: assortment_feed
+      column: catalogue_ref
+  columns:
+  - name: txn_ref
+    value_from: source.SalesOrder.id
+    description: Receipt containing the line
+  - name: article_key
+    value_from: target.Product.id
+    description: Merchandise sold on the line
+  - name: units_billed
+    value_from: relation.containsProduct.purchased_qty
+    description: Quantity purchased
+  - name: line_price
+    value_from: relation.containsProduct.unit_price_eur
+    description: Price per unit at time of sale in EUR
+  - name: txn_state
+    value_from: source.SalesOrder.order_status
+    description: Status repeated from receipt header
+  - name: label_brand
+    value_from: target.Product.brand
+    description: Brand repeated from product catalogue
+- name: branch_counts
+  base: relation
+  relation: stocks
+  description: 'Physical stock sheet: one row per branch and merchandise item'
+  primary_key:
+  - site_no
+  - sku_ref
+  foreign_keys:
+  - column: site_no
+    references:
+      table: branch_overview
+      column: outlet_ref
+  - column: sku_ref
+    references:
+      table: assortment_feed
+      column: catalogue_ref
+  columns:
+  - name: site_no
+    value_from: source.Store.store_code
+    description: Branch inventory reference
+  - name: sku_ref
+    value_from: target.Product.id
+    description: Stocked merchandise reference
+  - name: stock_balance
+    value_from: relation.stocks.on_hand_qty
+    description: Current units held
+  - name: minimum_trigger
+    value_from: relation.stocks.reorder_threshold
+    description: Reorder trigger quantity
+  - name: district
+    value_from: source.Store.city
+    description: Branch city copied into stock extract
+  - name: merch_group
+    value_from: target.Product.category
+    description: Product group copied into stock extract
+- name: claims_register
+  base: entity
+  entity: ReturnRecord
+  description: Return and refund requests with purchase and authorizer references
+  primary_key:
+  - rma_ref
+  foreign_keys:
+  - column: original_txn
+    references:
+      table: pos_headers
+      column: receipt_no
+  columns:
+  - name: rma_ref
+    value_from: entity.ReturnRecord.id
+    description: Return authorization reference
+  - name: claim_date
+    value_from: entity.ReturnRecord.return_date
+    description: Date return was submitted
+  - name: claim_cause
+    value_from: entity.ReturnRecord.return_reason
+    description: Reason for returning
+  - name: refund_eur
+    value_from: entity.ReturnRecord.refund_amount_eur
+    description: Refund amount in EUR
+  - name: workflow_state
+    value_from: entity.ReturnRecord.return_status
+    description: Return processing state
+  - name: item_grade
+    value_from: entity.ReturnRecord.condition_grade
+    description: Condition of returned merchandise
+  - name: original_txn
+    value_from: relation.returnOf.target.SalesOrder.id
+    description: Original sale reference
+- name: rma_authorizations
+  base: relation
+  relation: approvedBy
+  description: Approval assignments for returned merchandise
+  primary_key:
+  - rma_key
+  foreign_keys:
+  - column: rma_key
+    references:
+      table: claims_register
+      column: rma_ref
+  - column: authorized_staff
+    references:
+      table: staffing_extract
+      column: personnel_no
+  columns:
+  - name: rma_key
+    value_from: source.ReturnRecord.id
+    description: Return authorization reference
+  - name: authorized_staff
+    value_from: target.Employee.id
+    description: Employee approving the return
+  - name: decision_state
+    value_from: source.ReturnRecord.return_status
+    description: Return processing state repeated in approval log
+  - name: staff_branch
+    value_from: target.Employee.parent_Store
+    description: Branch employing the approving staff member

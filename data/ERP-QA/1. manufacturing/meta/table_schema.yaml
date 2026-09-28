@@ -1,0 +1,102 @@
+tables:
+  - name: FACT_PRODUCTION_ORDERS
+    base: entity
+    entity: ProductionOrder
+    description: "Production order log"
+    primary_key: [order_ref]
+    foreign_keys:
+      - column: product_code
+        references: {table: equipment_roster, column: prod_family}
+    columns:
+      - name: order_ref
+        value_from: entity.ProductionOrder.id
+        description: "Identifier of the production order"
+      - name: product_code
+        value_from: relation.forProduct.target.Product.id
+        description: "Identifier of the product produced"
+      - name: manufacturing_site
+        value_from: relation.produceAt.target.Plant.plant_name
+        description: "Name of the plant where the order is produced"
+      - name: completion_dt
+        value_from: entity.ProductionOrder.production_date
+        description: "Date the order was completed"
+      - name: yield_qty
+        value_from: entity.ProductionOrder.actual_quantity
+        description: "Quantity produced for the order"
+      - name: defect_scrap
+        value_from: entity.ProductionOrder.scrap_quantity
+        description: "Quantity scrapped as defects for the order"
+
+  - name: equipment_roster
+    base: entity
+    entity: Machine
+    expand_relation: produce
+    description: "Machine register with product families"
+    primary_key: [asset_id, prod_family]   # composite key to allow multiple products per machine
+    foreign_keys: []
+    columns:
+      - name: facility
+        value_from: entity.Machine.parent_Plant
+        description: "Plant where the machine is located"
+      - name: work_center
+        value_from: entity.Machine.parent_Department
+        description: "Department the machine belongs to"
+      - name: asset_id
+        value_from: entity.Machine.id
+        description: "Identifier of the machine"
+      - name: equip_category
+        value_from: entity.Machine.machine_type
+        description: "Type of the machine"
+      - name: max_load
+        value_from: entity.Machine.capacity
+        description: "Maximum capacity of the machine"
+      - name: prod_family
+        value_from: relation.produce.target.Product.id
+        description: "Identifier of the product the machine produces"
+
+  - name: Inventory_Catalog
+    base: entity
+    entity: Part
+    description: "Part inventory catalog"
+    primary_key: [Component_Id]
+    foreign_keys: []
+    columns:
+      - name: Location
+        value_from: relation.hasPart.source.Plant.plant_name
+        description: "Plant that owns the part"
+      - name: Component_Id
+        value_from: entity.Part.id
+        description: "Identifier of the part"
+      - name: Part_Class
+        value_from: entity.Part.part_type
+        description: "Type of the part"
+      - name: Current_Status
+        value_from: entity.Part.part_status
+        description: "Current status of the part"
+
+  - name: mtce_log
+    base: relation
+    relation: usePart
+    description: "Machine maintenance log"
+    primary_key: [unit_id, spare_part_SN, installed_on]
+    foreign_keys:
+      - column: unit_id
+        references: {table: equipment_roster, column: asset_id}
+      - column: spare_part_SN
+        references: {table: Inventory_Catalog, column: Component_Id}
+    columns:
+      - name: site
+        value_from: source.Machine.parent_Plant
+        description: "Plant where the machine is located"
+      - name: dept
+        value_from: source.Machine.parent_Department
+        description: "Department the machine belongs to"
+      - name: unit_id
+        value_from: source.Machine.id
+        description: "Identifier of the machine"
+      - name: spare_part_SN
+        value_from: target.Part.id
+        description: "Identifier of the part installed"
+      - name: installed_on
+        value_from: relation.usePart.installation_date
+        description: "Date the part was installed"

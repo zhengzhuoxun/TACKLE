@@ -1,0 +1,23 @@
+# Entity counts and per-type question quota for the university scenario.
+# 46 x 5 = 230 questions; with the 104-question manufacturing benchmark
+# the two domains total 334.
+entities:
+  Faculty:
+    count: 6
+  Department:
+    count_per_parent: [3, 5]
+  Professor:
+    count_per_parent: [2, 4]
+  Course:
+    count: 30
+  Lab:
+    count: 45
+  CourseSection:
+    count: 80
+
+question_types:
+  "1-hop retrieval": 46
+  "2-hop retrieval": 46
+  "3-hop retrieval": 46
+  "Flat Aggregation": 46
+  "Nested Aggregation": 46

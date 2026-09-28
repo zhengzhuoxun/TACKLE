@@ -1,0 +1,117 @@
+tables:
+  - name: COURSE_SECTION_LEDGER
+    base: entity
+    entity: CourseSection
+    description: "Course section enrollment ledger"
+    primary_key: [section_ref]
+    foreign_keys:
+      - column: course_code
+        references: {table: course_assignment, column: course_code}
+    columns:
+      - name: section_ref
+        value_from: entity.CourseSection.id
+        description: "Identifier of the course section"
+      - name: course_code
+        value_from: relation.sectionOf.target.Course.id
+        description: "Identifier of the course this section belongs to"
+      - name: hosting_school
+        value_from: relation.offeredBy.target.Faculty.faculty_name
+        description: "Name of the faculty offering the section"
+      - name: term_start
+        value_from: entity.CourseSection.start_date
+        description: "Date the section starts"
+      - name: headcount
+        value_from: entity.CourseSection.enrolled_students
+        description: "Number of students enrolled in the section"
+      - name: withdrawals
+        value_from: entity.CourseSection.dropped_students
+        description: "Number of students who dropped the section"
+
+  - name: HR_STAFF_DIRECTORY
+    base: entity
+    entity: Professor
+    description: "Academic staff directory"
+    primary_key: [EmpNo]
+    foreign_keys: []
+    columns:
+      - name: EmpNo
+        value_from: entity.Professor.id
+        description: "Identifier of the professor"
+      - name: Fac
+        value_from: entity.Professor.parent_Faculty
+        description: "Faculty the professor belongs to"
+      - name: OrgUnit
+        value_from: entity.Professor.parent_Department
+        description: "Department the professor belongs to"
+      - name: Rank
+        value_from: entity.Professor.academic_rank
+        description: "Academic rank of the professor"
+      - name: FundingEUR
+        value_from: entity.Professor.research_funding
+        description: "Research funding held by the professor"
+
+  - name: course_assignment
+    base: relation
+    relation: teaches
+    description: "Teaching assignment list"
+    primary_key: [lecturer_ref, course_code]
+    foreign_keys:
+      - column: lecturer_ref
+        references: {table: HR_STAFF_DIRECTORY, column: EmpNo}
+    columns:
+      - name: home_dept
+        value_from: source.Professor.parent_Department
+        description: "Department of the teaching professor"
+      - name: lecturer_ref
+        value_from: source.Professor.id
+        description: "Identifier of the teaching professor"
+      - name: course_code
+        value_from: target.Course.id
+        description: "Identifier of the course taught"
+
+  - name: Lab_Registry
+    base: entity
+    entity: Lab
+    description: "Laboratory registry"
+    primary_key: [Lab_Code]
+    foreign_keys: []
+    columns:
+      - name: Owning_Faculty
+        value_from: relation.hasLab.source.Faculty.faculty_name
+        description: "Faculty that owns the lab"
+      - name: Lab_Code
+        value_from: entity.Lab.id
+        description: "Identifier of the lab"
+      - name: Lab_Category
+        value_from: entity.Lab.lab_type
+        description: "Type of the lab"
+      - name: Operating_Status
+        value_from: entity.Lab.lab_status
+        description: "Current operating status of the lab"
+
+  - name: lab_assignment_log
+    base: relation
+    relation: managesLab
+    description: "Lab management assignment log"
+    primary_key: [pi_staff_no, lab_ref, assigned_on]
+    foreign_keys:
+      - column: pi_staff_no
+        references: {table: HR_STAFF_DIRECTORY, column: EmpNo}
+      - column: lab_ref
+        references: {table: Lab_Registry, column: Lab_Code}
+    columns:
+      - name: school_name
+        value_from: source.Professor.parent_Faculty
+        description: "Faculty of the managing professor"
+      - name: dept
+        value_from: source.Professor.parent_Department
+        description: "Department of the managing professor"
+      - name: pi_staff_no
+        value_from: source.Professor.id
+        description: "Identifier of the managing professor"
+      - name: lab_ref
+        value_from: target.Lab.id
+        description: "Identifier of the managed lab"
+      - name: assigned_on
+        value_from: relation.managesLab.assigned_date
+        description: "Date the professor was assigned to manage the lab"

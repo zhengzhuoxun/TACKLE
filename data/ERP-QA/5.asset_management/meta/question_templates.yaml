@@ -1,0 +1,392 @@
+# ERP-QA question templates: It Service Asset Management
+# $parameter in Cypher corresponds to {parameter} in the NL question.
+# Every relation and property refers to its paired kgschema.yaml.
+# Return DISTINCT list answers; nested superlatives return all ties,
+# while unique_answer: true allows the generator to discard tied winners.
+# Dates are stored as ISO strings (use date(...) for comparison).
+placeholders:
+  department_code:
+  - Department
+  - department_code
+  employee_id:
+  - Employee
+  - id
+  asset_id:
+  - ITAsset
+  - id
+  ticket_id:
+  - ServiceTicket
+  - id
+  team_id:
+  - SupportTeam
+  - id
+  vendor_id:
+  - Vendor
+  - id
+placeholder_links: {}
+templates:
+- type: 1-hop retrieval
+  cypher: |
+    MATCH (:Vendor {id: $vendor_id})-[:supplies]->(a:ITAsset)
+    RETURN DISTINCT a.id AS answer
+  nl: Which assets were supplied by vendor {vendor_id}?
+- type: 1-hop retrieval
+  cypher: |
+    MATCH (:SupportTeam {id: $team_id})-[:supports]->(d:Department)
+    RETURN DISTINCT d.department_code AS answer
+  nl: Which departments are supported by team {team_id}?
+- type: 1-hop retrieval
+  cypher: |
+    MATCH (:Employee {id: $employee_id})-[:memberOf]->(t:SupportTeam)
+    RETURN DISTINCT t.id AS answer
+  nl: Which support team is employee {employee_id} a member of?
+- type: 1-hop retrieval
+  cypher: |
+    MATCH (:ITAsset {id: $asset_id})-[:assignedTo]->(e:Employee)
+    RETURN DISTINCT e.id AS answer
+  nl: Which employee is asset {asset_id} assigned to?
+- type: 1-hop retrieval
+  cypher: |
+    MATCH (:Employee {id: $employee_id})-[:submits]->(t:ServiceTicket)
+    RETURN DISTINCT t.id AS answer
+  nl: Which tickets were submitted by employee {employee_id}?
+- type: 1-hop retrieval
+  cypher: |
+    MATCH (:ServiceTicket {id: $ticket_id})-[:handledBy]->(t:SupportTeam)
+    RETURN DISTINCT t.id AS answer
+  nl: Which team handles ticket {ticket_id}?
+- type: 1-hop retrieval
+  cypher: |
+    MATCH (:ServiceTicket {id: $ticket_id})-[:concerns]->(a:ITAsset)
+    RETURN DISTINCT a.id AS answer
+  nl: Which asset does ticket {ticket_id} concern?
+- type: 1-hop retrieval
+  cypher: |
+    MATCH (:Department {department_code: $department_code})-[:has_itasset]->(a:ITAsset)
+    RETURN DISTINCT a.id AS answer
+  nl: Which assets belong to department {department_code}?
+- type: 1-hop retrieval
+  cypher: |
+    MATCH (:ServiceTicket {id: $ticket_id})-[r:handledBy]->(:SupportTeam)
+    RETURN r.sla_hours AS answer
+  nl: What service-level target is recorded for ticket {ticket_id}?
+- type: 2-hop retrieval
+  cypher: |
+    MATCH (:Vendor {id: $vendor_id})-[:supplies]->(:ITAsset)-[:assignedTo]->(e:Employee)
+    RETURN DISTINCT e.id AS answer
+  nl: Which employees are assigned assets supplied by vendor {vendor_id}?
+- type: 2-hop retrieval
+  cypher: |
+    MATCH (:Employee {id: $employee_id})-[:submits]->(:ServiceTicket)-[:handledBy]->(t:SupportTeam)
+    RETURN DISTINCT t.id AS answer
+  nl: Which support teams handle tickets submitted by employee {employee_id}?
+- type: 2-hop retrieval
+  cypher: |
+    MATCH (:Employee {id: $employee_id})-[:submits]->(:ServiceTicket)-[:concerns]->(a:ITAsset)
+    RETURN DISTINCT a.id AS answer
+  nl: Which assets are referenced by tickets submitted by employee {employee_id}?
+- type: 2-hop retrieval
+  cypher: |
+    MATCH (:SupportTeam {id: $team_id})<-[:handledBy]-(t:ServiceTicket)<-[:submits]-(:Employee)
+    RETURN DISTINCT t.id AS answer
+  nl: Which submitted tickets are handled by team {team_id}?
+- type: 2-hop retrieval
+  cypher: |
+    MATCH (:Department {department_code: $department_code})<-[:supports]-(:SupportTeam)<-[:handledBy]-(t:ServiceTicket)
+    RETURN DISTINCT t.id AS answer
+  nl: Which tickets are handled by teams supporting department {department_code}?
+- type: 2-hop retrieval
+  cypher: |
+    MATCH (:Vendor {id: $vendor_id})-[:supplies]->(:ITAsset)<-[:concerns]-(t:ServiceTicket)
+    RETURN DISTINCT t.id AS answer
+  nl: Which tickets concern assets supplied by vendor {vendor_id}?
+- type: 2-hop retrieval
+  cypher: |
+    MATCH (:Department {department_code: $department_code})-[:has_employee]->(:Employee)-[:submits]->(t:ServiceTicket)
+    RETURN DISTINCT t.id AS answer
+  nl: Which tickets were submitted by employees of department {department_code}?
+- type: 3-hop retrieval
+  cypher: |
+    MATCH (:Vendor {id: $vendor_id})-[:supplies]->(:ITAsset)<-[:concerns]-(:ServiceTicket)<-[:submits]-(e:Employee)
+    RETURN DISTINCT e.id AS answer
+  nl: Which employees submitted tickets about assets supplied by vendor {vendor_id}?
+- type: 3-hop retrieval
+  cypher: |
+    MATCH (:Vendor {id: $vendor_id})-[:supplies]->(:ITAsset)-[:assignedTo]->(:Employee)-[:submits]->(t:ServiceTicket)
+    RETURN DISTINCT t.id AS answer
+  nl: Which tickets were submitted by employees assigned assets supplied by vendor {vendor_id}?
+- type: 3-hop retrieval
+  cypher: |
+    MATCH (:Department {department_code: $department_code})<-[:supports]-(:SupportTeam)<-[:handledBy]-(:ServiceTicket)<-[:submits]-(e:Employee)
+    RETURN DISTINCT e.id AS answer
+  nl: Which employees submitted tickets handled by teams supporting department {department_code}?
+- type: 3-hop retrieval
+  cypher: |
+    MATCH (:SupportTeam {id: $team_id})<-[:memberOf]-(:Employee)-[:submits]->(:ServiceTicket)-[:concerns]->(a:ITAsset)
+    RETURN DISTINCT a.id AS answer
+  nl: Which assets are mentioned in tickets submitted by team {team_id} members?
+- type: 3-hop retrieval
+  cypher: |
+    MATCH (:Department {department_code: $department_code})-[:has_employee]->(:Employee)-[:submits]->(:ServiceTicket)-[:handledBy]->(t:SupportTeam)
+    RETURN DISTINCT t.id AS answer
+  nl: Which support teams handle tickets submitted by employees of department {department_code}?
+- type: 3-hop retrieval
+  cypher: |
+    MATCH (:Vendor {id: $vendor_id})-[:supplies]->(:ITAsset)<-[:concerns]-(:ServiceTicket)-[:handledBy]->(t:SupportTeam)
+    RETURN DISTINCT t.id AS answer
+  nl: Which support teams handle tickets concerning assets supplied by vendor {vendor_id}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Department {department_code: $department_code})-[:has_employee]->(e:Employee)
+    RETURN count(e) AS answer
+  nl: How many employees belong to department {department_code}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Department {department_code: $department_code})-[:has_itasset]->(a:ITAsset)
+    RETURN count(a) AS answer
+  nl: How many IT assets belong to department {department_code}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Vendor {id: $vendor_id})-[:supplies]->(a:ITAsset)
+    RETURN count(a) AS answer
+  nl: How many assets does vendor {vendor_id} supply?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:SupportTeam {id: $team_id})<-[:handledBy]-(t:ServiceTicket)
+    RETURN count(t) AS answer
+  nl: How many tickets are handled by team {team_id}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Employee {id: $employee_id})-[:submits]->(t:ServiceTicket)
+    RETURN count(t) AS answer
+  nl: How many tickets were submitted by employee {employee_id}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Employee {id: $employee_id})-[:resolves]->(t:ServiceTicket)
+    RETURN count(t) AS answer
+  nl: How many tickets were resolved by employee {employee_id}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:SupportTeam {id: $team_id})-[:supports]->(d:Department)
+    RETURN count(DISTINCT d) AS answer
+  nl: How many departments does support team {team_id} serve?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Department {department_code: $department_code})-[:has_itasset]->(a:ITAsset)
+    RETURN sum(a.purchase_cost_eur) AS answer
+  nl: What is the total purchase cost of assets belonging to department {department_code}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Vendor {id: $vendor_id})-[:supplies]->(a:ITAsset)
+    RETURN sum(a.purchase_cost_eur) AS answer
+  nl: What is the total purchase cost of assets supplied by vendor {vendor_id}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:SupportTeam {id: $team_id})<-[r:handledBy]-(:ServiceTicket)
+    RETURN avg(r.sla_hours) AS answer
+  nl: What is the average service-level target on tickets handled by team {team_id}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Employee {id: $employee_id})-[r:resolves]->(:ServiceTicket)
+    RETURN avg(r.resolution_minutes) AS answer
+  nl: What is the average resolution time for tickets resolved by employee {employee_id}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Department {department_code: $department_code})-[:has_employee]->(:Employee)-[:submits]->(t:ServiceTicket)
+    RETURN count(DISTINCT t) AS answer
+  nl: How many different tickets were submitted by members of department {department_code}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:ITAsset {id: $asset_id})<-[:concerns]-(t:ServiceTicket)
+    RETURN count(t) AS answer
+  nl: How many tickets concern asset {asset_id}?
+- type: Nested Aggregation
+  cypher: |
+    MATCH (d:Department)-[:has_itasset]->(a:ITAsset)
+    WITH d, count(a) AS score
+    WITH max(score) AS top, collect({answer: d.department_code, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which department owns the most IT assets?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (d:Department)
+    WITH d, max(d.annual_it_budget_eur) AS score
+    WITH max(score) AS top, collect({answer: d.department_code, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which department has the highest annual IT budget?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (v:Vendor)-[:supplies]->(a:ITAsset)
+    WITH v, count(a) AS score
+    WITH max(score) AS top, collect({answer: v.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which vendor supplies the most assets?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (t:SupportTeam)<-[:handledBy]-(s:ServiceTicket)
+    WITH t, count(s) AS score
+    WITH max(score) AS top, collect({answer: t.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which support team handles the greatest number of tickets?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (e:Employee)-[:submits]->(t:ServiceTicket)
+    WITH e, count(t) AS score
+    WITH max(score) AS top, collect({answer: e.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which employee has submitted the most service tickets?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (e:Employee)-[:resolves]->(t:ServiceTicket)
+    WITH e, count(t) AS score
+    WITH max(score) AS top, collect({answer: e.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which employee has resolved the most service tickets?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (d:Department)-[:has_itasset]->(a:ITAsset)
+    WITH d, sum(a.purchase_cost_eur) AS score
+    WITH max(score) AS top, collect({answer: d.department_code, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which department has the highest total asset purchase cost?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (t:SupportTeam)<-[r:handledBy]-(:ServiceTicket)
+    WITH t, avg(r.sla_hours) AS score
+    WITH max(score) AS top, collect({answer: t.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which support team has the highest average ticket service-level target?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (v:Vendor)-[:supplies]->(:ITAsset)<-[:concerns]-(s:ServiceTicket)
+    WITH v, count(DISTINCT s) AS score
+    WITH max(score) AS top, collect({answer: v.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which vendor has the largest number of tickets concerning its assets?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (:Department {department_code: $department_code})-[:has_employee]->(e:Employee)-[:submits]->(t:ServiceTicket)
+    WITH e, count(t) AS score
+    WITH max(score) AS top, collect({answer: e.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which employee in department {department_code} has submitted the most tickets?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (:SupportTeam {id: $team_id})<-[:memberOf]-(e:Employee)-[:resolves]->(t:ServiceTicket)
+    WITH e, count(t) AS score
+    WITH max(score) AS top, collect({answer: e.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which member of team {team_id} has resolved the most tickets?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (:Vendor {id: $vendor_id})-[:supplies]->(a:ITAsset)<-[:concerns]-(t:ServiceTicket)
+    WITH a, count(t) AS score
+    WITH max(score) AS top, collect({answer: a.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which asset supplied by vendor {vendor_id} is referenced by the most tickets?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (t:SupportTeam)<-[r:handledBy]-(:ServiceTicket)
+    WITH t, sum(r.sla_hours) AS score
+    WITH max(score) AS top, collect({answer: t.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which support team has the largest sum of ticket service-level targets?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (v:Vendor)-[:supplies]->(a:ITAsset)
+    WITH v, sum(a.purchase_cost_eur) AS score
+    WITH max(score) AS top, collect({answer: v.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which vendor has the greatest total purchase cost of supplied assets?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (d:Department)-[:has_employee]->(:Employee)-[:submits]->(t:ServiceTicket)
+    WITH d, count(DISTINCT t) AS score
+    WITH max(score) AS top, collect({answer: d.department_code, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which department has members who submitted the most tickets?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (:SupportTeam {id: $team_id})<-[:memberOf]-(e:Employee)-[:submits]->(t:ServiceTicket)
+    WITH e, count(t) AS score
+    WITH max(score) AS top, collect({answer: e.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which member of team {team_id} has submitted the most tickets?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (:Department {department_code: $department_code})-[:has_itasset]->(:ITAsset)<-[:supplies]-(v:Vendor)
+    WITH v, count(*) AS score
+    WITH max(score) AS top, collect({answer: v.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which vendor supplied the most assets belonging to department {department_code}?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (:Department {department_code: $department_code})-[:has_employee]->(e:Employee)<-[:assignedTo]-(a:ITAsset)
+    WITH e, sum(a.purchase_cost_eur) AS score
+    WITH max(score) AS top, collect({answer: e.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which employee in department {department_code} has the highest combined purchase cost of assigned assets?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (:SupportTeam {id: $team_id})<-[r:handledBy]-(t:ServiceTicket)
+    WITH t, max(r.sla_hours) AS score
+    WITH max(score) AS top, collect({answer: t.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which ticket handled by team {team_id} has the highest service-level target?
+  unique_answer: true

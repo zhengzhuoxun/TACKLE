@@ -1,0 +1,560 @@
+# question_templates.yaml
+# Each entry defines a Cypher query template and its paired natural-language question template.
+# Placeholders are shared between the two: $param in Cypher ↔ {param} in NL.
+# `type` is the reasoning type the template is counted under (see specify.yaml quotas).
+#
+# Conventions (enforced by generate_question_answer.py):
+# - Each (template, parameters) pair yields at most one question -- no repeats.
+# - A department is identified by (plant, name): every template that takes
+#   $department_name also takes $plant_name, sampled from the same department.
+# - List answers use DISTINCT, so an entity reached along several paths is
+#   listed once.
+# - Superlative templates ("which X has the most ...") return EVERY row tied
+#   for the top value and set `unique_answer: true`; a sampled question is kept
+#   only when exactly one row wins, so the gold answer is never an arbitrary pick.
+# - Dates are stored as ISO strings; convert with date(...) before comparing.
+
+# $placeholder -> [entity type, attribute] it is sampled from.
+placeholders:
+  machine_id:      [Machine, id]
+  plant_name:      [Plant, plant_name]
+  department_name: [Department, department_name]
+  product_id:      [Product, id]
+  order_id:        [ProductionOrder, id]
+
+# A department is identified by (plant, name): when a template uses both,
+# $plant_name is the sampled department's own plant.
+placeholder_links:
+  plant_name: [department_name, parent_Plant]
+
+templates:
+
+  # ==================== Retrieval (1-hop) ====================
+  - type: 1-hop retrieval
+    cypher: |
+      MATCH (m:Machine {id: $machine_id})-[:produce]->(p:Product)
+      RETURN DISTINCT p.id AS answer
+    nl: "Which products does the machine {machine_id} produce?"
+
+  - type: 1-hop retrieval
+    cypher: |
+      MATCH (p:Plant {plant_name: $plant_name})-[:has_department]->(d:Department)
+      RETURN DISTINCT d.department_name AS answer
+    nl: "Which departments belong to the plant {plant_name}?"
+
+  - type: 1-hop retrieval
+    cypher: |
+      MATCH (p:Plant {plant_name: $plant_name})-[:hasPart]->(part:Part)
+      RETURN DISTINCT part.id AS answer
+    nl: "Which parts are owned by the plant {plant_name}?"
+
+  - type: 1-hop retrieval
+    cypher: |
+      MATCH (m:Machine {id: $machine_id})
+      RETURN m.capacity AS answer
+    nl: "What is the capacity of machine {machine_id}?"
+
+  - type: 1-hop retrieval
+    cypher: |
+      MATCH (o:ProductionOrder {id: $order_id})
+      RETURN o.production_date AS answer
+    nl: "What is the production date of order {order_id}?"
+
+  # ==================== Retrieval (2-hop) ====================
+  - type: 2-hop retrieval
+    cypher: |
+      MATCH (p:Plant {plant_name: $plant_name})-[:has_department]->(d:Department)-[:has_machine]->(m:Machine)
+      RETURN DISTINCT m.id AS answer
+    nl: "Which machines are located in the plant {plant_name}?"
+
+  - type: 2-hop retrieval
+    cypher: |
+      MATCH (:Plant {plant_name: $plant_name})-[:has_department]->(d:Department {department_name: $department_name})-[:has_machine]->(m:Machine)-[:produce]->(p:Product)
+      RETURN DISTINCT p.id AS answer
+    nl: "Which products can be produced by the department {department_name} in plant {plant_name}?"
+
+  - type: 2-hop retrieval
+    cypher: |
+      MATCH (:Plant {plant_name: $plant_name})-[:has_department]->(d:Department {department_name: $department_name})-[:has_machine]->(m:Machine)-[:usePart]->(part:Part)
+      RETURN DISTINCT part.id AS answer
+    nl: "Which parts are used by machines in the department {department_name} in plant {plant_name}?"
+
+  - type: 2-hop retrieval
+    cypher: |
+      MATCH (:Plant {plant_name: $plant_name})-[:has_department]->(d:Department)-[:has_machine]->(m:Machine)-[:produce]->(p:Product {id: $product_id})
+      RETURN DISTINCT d.department_name AS answer
+    nl: "Which departments in plant {plant_name} have machines that produce product {product_id}?"
+
+  - type: 2-hop retrieval
+    cypher: |
+      MATCH (p:Plant)-[:has_department]->(d:Department)-[:has_machine]->(m:Machine {id: $machine_id})
+      RETURN DISTINCT p.plant_name AS answer
+    nl: "Which plants have departments that operate machine {machine_id}?"
+
+  # ==================== Retrieval (3-hop) ====================
+  - type: 3-hop retrieval
+    cypher: |
+      MATCH (p:Plant {plant_name: $plant_name})-[:has_department]->(d:Department)-[:has_machine]->(m:Machine)-[:produce]->(prod:Product)
+      RETURN DISTINCT prod.id AS answer
+    nl: "Which products can be manufactured by the plant {plant_name}?"
+
+  - type: 3-hop retrieval
+    cypher: |
+      MATCH (p:Plant {plant_name: $plant_name})-[:has_department]->(d:Department)-[:has_machine]->(m:Machine)-[:usePart]->(part:Part)
+      RETURN DISTINCT part.id AS answer
+    nl: "Which parts are used by machines in the plant {plant_name}?"
+
+  - type: 3-hop retrieval
+    cypher: |
+      MATCH (p:Plant {plant_name: $plant_name})-[:has_department]->(d:Department)-[:has_machine]->(m:Machine)-[:produce]->(prod:Product)<-[:forProduct]-(o:ProductionOrder)
+      RETURN DISTINCT o.id AS answer
+    nl: "Which orders are for products that can be produced by the plant {plant_name}?"
+
+  - type: 3-hop retrieval
+    cypher: |
+      MATCH (p:Plant {plant_name: $plant_name})-[:has_department]->(d:Department)-[:has_machine]->(m:Machine)-[:produce]->(prod:Product {id: $product_id})
+      RETURN DISTINCT m.id AS answer
+    nl: "Which machines in the plant {plant_name} produce product {product_id}?"
+
+  - type: 3-hop retrieval
+    cypher: |
+      MATCH (o:ProductionOrder {id: $order_id})-[:forProduct]->(prod:Product)<-[:produce]-(m:Machine)<-[:has_machine]-(d:Department)<-[:has_department]-(p:Plant)
+      RETURN DISTINCT p.plant_name AS answer
+    nl: "Which plants can produce products that are ordered by order {order_id}?"
+
+  # ==================== Flat Aggregation (Count) ====================
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (p:Plant {plant_name: $plant_name})-[:has_department]->(d:Department)
+      RETURN count(d) AS answer
+    nl: "How many departments does the plant {plant_name} have?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (:Plant {plant_name: $plant_name})-[:has_department]->(d:Department {department_name: $department_name})-[:has_machine]->(m:Machine)
+      RETURN count(m) AS answer
+    nl: "How many machines does the department {department_name} in plant {plant_name} have?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (p:Plant {plant_name: $plant_name})-[:has_department]->(d:Department)-[:has_machine]->(m:Machine)
+      RETURN count(m) AS answer
+    nl: "How many machines are there in the plant {plant_name}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (p:Plant {plant_name: $plant_name})-[:hasPart]->(part:Part)
+      RETURN count(part) AS answer
+    nl: "How many parts are owned by the plant {plant_name}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (m:Machine {id: $machine_id})-[:usePart]->(part:Part)
+      RETURN count(part) AS answer
+    nl: "How many parts are used by the machine {machine_id}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (m:Machine {id: $machine_id})-[:produce]->(p:Product)
+      RETURN count(p) AS answer
+    nl: "How many products does the machine {machine_id} produce?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (p:Plant {plant_name: $plant_name})<-[:produceAt]-(o:ProductionOrder)
+      RETURN count(o) AS answer
+    nl: "How many orders were placed for the plant {plant_name}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (o:ProductionOrder)-[:forProduct]->(p:Product {id: $product_id})
+      RETURN count(o) AS answer
+    nl: "How many orders are for the product {product_id}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (p:Plant {plant_name: $plant_name})-[:has_department]->(d:Department)-[:has_machine]->(m:Machine)-[:produce]->(prod:Product {id: $product_id})
+      RETURN count(m) AS answer
+    nl: "How many machines in plant {plant_name} produce product {product_id}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (:Plant {plant_name: $plant_name})-[:has_department]->(d:Department {department_name: $department_name})-[:has_machine]->(m:Machine)-[:produce]->(p:Product)
+      RETURN count(DISTINCT p) AS answer
+    nl: "How many products can be produced by the department {department_name} in plant {plant_name}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (:Plant {plant_name: $plant_name})-[:has_department]->(d:Department {department_name: $department_name})-[:has_machine]->(m:Machine)-[:usePart]->(part:Part)
+      RETURN count(part) AS answer
+    nl: "How many parts are installed on machines in department {department_name} in plant {plant_name}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (part:Part)
+      WHERE NOT (part)<-[:usePart]-(:Machine)
+      RETURN count(part) AS answer
+    nl: "How many parts are not used by any machine?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (p:Plant {plant_name: $plant_name})-[:has_department]->(d:Department)-[:has_machine]->(m:Machine)-[:usePart]->(part:Part)
+      WITH DISTINCT m
+      RETURN count(m) AS answer
+    nl: "How many machines in plant {plant_name} have at least one part installed?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (p:Plant {plant_name: $plant_name})<-[:produceAt]-(o:ProductionOrder)
+      WHERE date(o.production_date) >= date('2024-01-01') AND date(o.production_date) <= date('2024-12-31')
+      RETURN count(o) AS answer
+    nl: "How many orders were placed for plant {plant_name} in the year 2024?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (p:Plant {plant_name: $plant_name})-[:has_department]->(d:Department)-[:has_machine]->(m:Machine)-[:produce]->(prod:Product)
+      RETURN count(DISTINCT prod) AS answer
+    nl: "How many distinct products are produced by machines in plant {plant_name}?"
+
+  # ==================== Flat Aggregation (Sum) ====================
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (:Plant {plant_name: $plant_name})-[:has_department]->(d:Department {department_name: $department_name})-[:has_machine]->(m:Machine)
+      RETURN sum(m.capacity) AS answer
+    nl: "What is the total capacity of all machines in department {department_name} in plant {plant_name}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (p:Plant {plant_name: $plant_name})-[:has_department]->(d:Department)-[:has_machine]->(m:Machine)
+      RETURN sum(m.capacity) AS answer
+    nl: "What is the total capacity of all machines in plant {plant_name}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (m:Machine)-[:produce]->(p:Product {id: $product_id})
+      RETURN sum(m.capacity) AS answer
+    nl: "What is the total capacity of machines that produce product {product_id}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (p:Plant {plant_name: $plant_name})<-[:produceAt]-(o:ProductionOrder)
+      RETURN sum(o.actual_quantity) AS answer
+    nl: "What is the total actual quantity of all orders placed for plant {plant_name}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (o:ProductionOrder)-[:forProduct]->(p:Product {id: $product_id})
+      RETURN sum(o.actual_quantity) AS answer
+    nl: "What is the total actual quantity of orders for product {product_id}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (m:Machine {id: $machine_id})-[:produce]->(p:Product)<-[:forProduct]-(o:ProductionOrder)
+      RETURN sum(o.actual_quantity) AS answer
+    nl: "What is the total actual quantity of orders for products produced by machine {machine_id}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (p:Plant {plant_name: $plant_name})<-[:produceAt]-(o:ProductionOrder)
+      RETURN sum(o.scrap_quantity) AS answer
+    nl: "What is the total scrap quantity of all orders placed for plant {plant_name}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (o:ProductionOrder)-[:forProduct]->(p:Product {id: $product_id})
+      RETURN sum(o.scrap_quantity) AS answer
+    nl: "What is the total scrap quantity of orders for product {product_id}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (m:Machine {id: $machine_id})-[:produce]->(p:Product)<-[:forProduct]-(o:ProductionOrder)
+      RETURN sum(o.scrap_quantity) AS answer
+    nl: "What is the total scrap quantity of orders for products produced by machine {machine_id}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (o:ProductionOrder)
+      WHERE date(o.production_date) >= date('2024-01-01') AND date(o.production_date) <= date('2024-12-31')
+      RETURN sum(o.actual_quantity) AS answer
+    nl: "What is the total actual quantity of all orders in the year 2024?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (o:ProductionOrder)
+      WHERE date(o.production_date) >= date('2024-01-01') AND date(o.production_date) <= date('2024-12-31')
+      RETURN sum(o.scrap_quantity) AS answer
+    nl: "What is the total scrap quantity of all orders in the year 2024?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (:Plant {plant_name: $plant_name})-[:has_department]->(d:Department {department_name: $department_name})-[:has_machine]->(m:Machine)-[:produce]->(p:Product {id: $product_id})
+      RETURN sum(m.capacity) AS answer
+    nl: "What is the total capacity of machines in department {department_name} in plant {plant_name} that produce product {product_id}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (p:Plant {plant_name: $plant_name})<-[:produceAt]-(o:ProductionOrder)-[:forProduct]->(prod:Product {id: $product_id})
+      RETURN sum(o.actual_quantity) AS answer
+    nl: "What is the total actual quantity of orders placed for plant {plant_name} for product {product_id}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (p:Plant {plant_name: $plant_name})<-[:produceAt]-(o:ProductionOrder)-[:forProduct]->(prod:Product {id: $product_id})
+      RETURN sum(o.scrap_quantity) AS answer
+    nl: "What is the total scrap quantity of orders placed for plant {plant_name} for product {product_id}?"
+
+  - type: Flat Aggregation
+    cypher: |
+      MATCH (p:Plant {plant_name: $plant_name})-[:has_department]->(d:Department)-[:has_machine]->(m:Machine)-[:produce]->(prod:Product)<-[:forProduct]-(o:ProductionOrder)
+      WITH DISTINCT o
+      RETURN sum(o.actual_quantity) AS answer
+    nl: "What is the total actual quantity of all orders for products produced by machines in plant {plant_name}?"
+
+  # ==================== Nested Aggregation ====================
+  # Pattern: aggregate per group into `score`, keep every group whose score
+  # equals the maximum; `unique_answer: true` drops questions with a tie.
+
+  # ---- global ----
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (p:Plant)-[:hasPart]->(part:Part)
+      WITH p, count(part) AS score
+      WITH max(score) AS top, collect({answer: p.plant_name, score: score}) AS rows
+      UNWIND rows AS row
+      WITH row, top WHERE row.score = top
+      RETURN row.answer AS answer
+    nl: "Which plant owns the most parts?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (p:Plant)-[:has_department]->(d:Department)
+      WITH p, count(d) AS score
+      WITH max(score) AS top, collect({answer: p.plant_name, score: score}) AS rows
+      UNWIND rows AS row
+      WITH row, top WHERE row.score = top
+      RETURN row.answer AS answer
+    nl: "Which plant has the most departments?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (m:Machine)-[:produce]->(p:Product)
+      WITH m, count(DISTINCT p) AS score
+      WITH max(score) AS top, collect({answer: m.id, score: score}) AS rows
+      UNWIND rows AS row
+      WITH row, top WHERE row.score = top
+      RETURN row.answer AS answer
+    nl: "Which machine produces the most different products?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (m:Machine)-[:usePart]->(part:Part)
+      WITH m, count(part) AS score
+      WITH max(score) AS top, collect({answer: m.id, score: score}) AS rows
+      UNWIND rows AS row
+      WITH row, top WHERE row.score = top
+      RETURN row.answer AS answer
+    nl: "Which machine uses the most parts?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (p:Plant)-[:has_department]->(d:Department)-[:has_machine]->(m:Machine)
+      WITH p, count(m) AS score
+      WITH max(score) AS top, collect({answer: p.plant_name, score: score}) AS rows
+      UNWIND rows AS row
+      WITH row, top WHERE row.score = top
+      RETURN row.answer AS answer
+    nl: "Which plant has the highest total number of machines?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (p:Product)<-[:produce]-(m:Machine)
+      WITH p, count(m) AS score
+      WITH max(score) AS top, collect({answer: p.id, score: score}) AS rows
+      UNWIND rows AS row
+      WITH row, top WHERE row.score = top
+      RETURN row.answer AS answer
+    nl: "Which product is produced by the most machines?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (m:Machine)-[u:usePart]->(part:Part)
+      WITH m, max(date(u.installation_date)) AS score
+      WITH max(score) AS top, collect({answer: m.id, score: score}) AS rows
+      UNWIND rows AS row
+      WITH row, top WHERE row.score = top
+      RETURN row.answer AS answer
+    nl: "Which machine has the most recent installation date of any part?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (p:Plant)<-[:produceAt]-(o:ProductionOrder)
+      WITH p, count(o) AS score
+      WITH max(score) AS top, collect({answer: p.plant_name, score: score}) AS rows
+      UNWIND rows AS row
+      WITH row, top WHERE row.score = top
+      RETURN row.answer AS answer
+    nl: "Which plant has the highest number of orders placed for it?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (p:Product)<-[:forProduct]-(o:ProductionOrder)
+      WITH p, count(o) AS score
+      WITH max(score) AS top, collect({answer: p.id, score: score}) AS rows
+      UNWIND rows AS row
+      WITH row, top WHERE row.score = top
+      RETURN row.answer AS answer
+    nl: "Which product has the most orders placed for it?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (m:Machine)-[:produce]->(p:Product)<-[:forProduct]-(o:ProductionOrder)
+      WITH m, count(o) AS score
+      WITH max(score) AS top, collect({answer: m.id, score: score}) AS rows
+      UNWIND rows AS row
+      WITH row, top WHERE row.score = top
+      RETURN row.answer AS answer
+    nl: "Which machine's products have the most orders in total?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (p:Plant)-[:has_department]->(d:Department)-[:has_machine]->(m:Machine)-[:produce]->(prod:Product)
+      WITH p, count(DISTINCT prod) AS score
+      WITH max(score) AS top, collect({answer: p.plant_name, score: score}) AS rows
+      UNWIND rows AS row
+      WITH row, top WHERE row.score = top
+      RETURN row.answer AS answer
+    nl: "Which plant produces the most diverse set of products?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (p:Plant)<-[:produceAt]-(o:ProductionOrder)
+      WITH p, sum(o.scrap_quantity) AS score
+      WITH max(score) AS top, collect({answer: p.plant_name, score: score}) AS rows
+      UNWIND rows AS row
+      WITH row, top WHERE row.score = top
+      RETURN row.answer AS answer
+    nl: "Which plant has the highest total scrap quantity across all its orders?"
+
+  # ---- scoped to one plant ----
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (:Plant {plant_name: $plant_name})-[:has_department]->(d:Department)-[:has_machine]->(m:Machine)
+      WITH d, count(m) AS score
+      WITH max(score) AS top, collect({answer: d.department_name, score: score}) AS rows
+      UNWIND rows AS row
+      WITH row, top WHERE row.score = top
+      RETURN row.answer AS answer
+    nl: "Which department in plant {plant_name} has the most machines?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (:Plant {plant_name: $plant_name})-[:has_department]->(d:Department)-[:has_machine]->(m:Machine)
+      WITH d, avg(m.capacity) AS score
+      WITH max(score) AS top, collect({answer: d.department_name, score: score}) AS rows
+      UNWIND rows AS row
+      WITH row, top WHERE row.score = top
+      RETURN row.answer AS answer
+    nl: "Which department in plant {plant_name} has the highest average machine capacity?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (:Plant {plant_name: $plant_name})-[:has_department]->(d:Department)-[:has_machine]->(m:Machine)
+      WITH d, sum(m.capacity) AS score
+      WITH max(score) AS top, collect({answer: d.department_name, score: score}) AS rows
+      UNWIND rows AS row
+      WITH row, top WHERE row.score = top
+      RETURN row.answer AS answer
+    nl: "Which department in plant {plant_name} has the highest total machine capacity?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (:Plant {plant_name: $plant_name})-[:has_department]->(d:Department)-[:has_machine]->(m:Machine)-[:usePart]->(part:Part)
+      WITH d, count(part) AS score
+      WITH max(score) AS top, collect({answer: d.department_name, score: score}) AS rows
+      UNWIND rows AS row
+      WITH row, top WHERE row.score = top
+      RETURN row.answer AS answer
+    nl: "Which department in plant {plant_name} has the most parts installed on its machines?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (:Plant {plant_name: $plant_name})-[:has_department]->(:Department)-[:has_machine]->(m:Machine)-[:produce]->(p:Product)
+      WITH m, count(DISTINCT p) AS score
+      WITH max(score) AS top, collect({answer: m.id, score: score}) AS rows
+      UNWIND rows AS row
+      WITH row, top WHERE row.score = top
+      RETURN row.answer AS answer
+    nl: "Which machine in plant {plant_name} produces the most different products?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (:Plant {plant_name: $plant_name})-[:has_department]->(:Department)-[:has_machine]->(m:Machine)-[:usePart]->(part:Part)
+      WITH m, count(part) AS score
+      WITH max(score) AS top, collect({answer: m.id, score: score}) AS rows
+      UNWIND rows AS row
+      WITH row, top WHERE row.score = top
+      RETURN row.answer AS answer
+    nl: "Which machine in plant {plant_name} uses the most parts?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (:Plant {plant_name: $plant_name})-[:has_department]->(:Department)-[:has_machine]->(m:Machine)-[:produce]->(p:Product)
+      WITH p, count(m) AS score
+      WITH max(score) AS top, collect({answer: p.id, score: score}) AS rows
+      UNWIND rows AS row
+      WITH row, top WHERE row.score = top
+      RETURN row.answer AS answer
+    nl: "Which product is produced by the most machines in plant {plant_name}?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (:Plant {plant_name: $plant_name})<-[:produceAt]-(o:ProductionOrder)-[:forProduct]->(p:Product)
+      WITH p, count(o) AS score
+      WITH max(score) AS top, collect({answer: p.id, score: score}) AS rows
+      UNWIND rows AS row
+      WITH row, top WHERE row.score = top
+      RETURN row.answer AS answer
+    nl: "Which product has the most orders placed at plant {plant_name}?"
+
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (:Plant {plant_name: $plant_name})<-[:produceAt]-(o:ProductionOrder)
+      WITH o, o.actual_quantity AS score
+      WITH max(score) AS top, collect({answer: o.id, score: score}) AS rows
+      UNWIND rows AS row
+      WITH row, top WHERE row.score = top
+      RETURN row.answer AS answer
+    nl: "Which order has the highest actual quantity among those placed for plant {plant_name}?"
+
+  # ---- scoped to one product ----
+  - type: Nested Aggregation
+    unique_answer: true
+    cypher: |
+      MATCH (p:Plant)<-[:produceAt]-(o:ProductionOrder)-[:forProduct]->(:Product {id: $product_id})
+      WITH p, sum(o.actual_quantity) AS score
+      WITH max(score) AS top, collect({answer: p.plant_name, score: score}) AS rows
+      UNWIND rows AS row
+      WITH row, top WHERE row.score = top
+      RETURN row.answer AS answer
+    nl: "Which plant has the highest total actual quantity of orders for product {product_id}?"

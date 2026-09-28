@@ -1,0 +1,29 @@
+# Entity counts and per-type question quota for the retail scenario.
+# Sized to be comparable with scenario 1 (~190 entities, 120 questions).
+# 5 stores with 4-6 staff each, a 30-item assortment from 6 suppliers,
+# 45 loyalty customers placing 60 orders, and 15 returns.
+# Store codes are unique (max 6 stores).
+# Quota: 24 per type; the tightest type (Nested Aggregation) supports ~41 at
+# these counts -- raise entity counts before raising the quota.
+entities:
+  Store:
+    count: 5
+  Employee:
+    count_per_parent: [4, 6]
+  Product:
+    count: 30
+  Supplier:
+    count: 6
+  Customer:
+    count: 45
+  SalesOrder:
+    count: 60
+  ReturnRecord:
+    count: 15
+
+question_types:
+  "1-hop retrieval": 24
+  "2-hop retrieval": 24
+  "3-hop retrieval": 24
+  "Flat Aggregation": 24
+  "Nested Aggregation": 24

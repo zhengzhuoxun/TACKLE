@@ -1,0 +1,45 @@
+# =============================================================================
+# TACKLE — Pipeline Configuration
+# =============================================================================
+# Read by main.py (default config). CLI arguments override these values.
+#   python main.py
+#   python main.py --config config/pipeline.yaml --start 30 --end 35
+
+# Which dataset:
+#   two_table | three_table                      (data/MMQA, original MMQA)
+#   merged_two_table | merged_three_table        (data/merged_MMQA)
+#   dirty_three_table                            (data/dirty_MMQA)
+#   dirty_merged_two_table | dirty_merged_three_table  (data/dirty_merged_MMQA, Practical MMQA)
+#   self | merged_self                           (data/self, data/merged_self, ERP-QA)
+# --dataset-file <path> bypasses this and loads any dataset JSON directly.
+dataset: three_table
+
+# Output directory for results & intermediate artifacts
+output_dir: outputs
+
+# Enable debug-level logging and per-stage console reports
+verbose: false
+
+# Items to run: an inclusive item.id_ range. Set random_num_items > 0 to
+# randomly sample that many items instead.
+start_item: 30
+end_item: 30
+# random_num_items: 10
+
+# Pipeline stop point:
+#   cluster  — Stage I Steps 0–1 (table understanding + column clustering)
+#   merge    — + Step 2 (cluster merging)
+#   relation — + Step 3 (relation induction)
+#   schema   — + Step 4 (conceptual KG schema)
+#   instance — + instance-level KG
+#   full     — + Stage II Cypher translation and execution
+phase: full
+
+# Also run direct NL→Cypher translation (single LLM call, TACKLE-naive)
+# alongside the two-step pipeline, and report both accuracies.
+direct_cypher: false
+
+# Error-repair loop for the two-step pipeline: on a failed query, re-ask the
+# Cypher-rendering call with the execution error, up to N extra attempts.
+cypher_repair: false
+cypher_repair_attempts: 3

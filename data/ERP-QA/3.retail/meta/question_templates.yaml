@@ -1,0 +1,370 @@
+# ERP-QA question templates: Retail Operations
+# $parameter in Cypher corresponds to {parameter} in the NL question.
+# Every relation and property refers to its paired kgschema.yaml.
+# Return DISTINCT list answers; nested superlatives return all ties,
+# while unique_answer: true allows the generator to discard tied winners.
+# Dates are stored as ISO strings (use date(...) for comparison).
+placeholders:
+  store_code:
+  - Store
+  - store_code
+  employee_id:
+  - Employee
+  - id
+  product_id:
+  - Product
+  - id
+  supplier_id:
+  - Supplier
+  - id
+  customer_id:
+  - Customer
+  - id
+  order_id:
+  - SalesOrder
+  - id
+  return_id:
+  - ReturnRecord
+  - id
+placeholder_links: {}
+templates:
+- type: 1-hop retrieval
+  cypher: |
+    MATCH (:Store {store_code: $store_code})-[:stocks]->(p:Product)
+    RETURN DISTINCT p.id AS answer
+  nl: Which products are stocked by store {store_code}?
+- type: 1-hop retrieval
+  cypher: |
+    MATCH (:Supplier {id: $supplier_id})-[:supplies]->(p:Product)
+    RETURN DISTINCT p.id AS answer
+  nl: Which products does supplier {supplier_id} provide?
+- type: 1-hop retrieval
+  cypher: |
+    MATCH (:Customer {id: $customer_id})-[:places]->(o:SalesOrder)
+    RETURN DISTINCT o.id AS answer
+  nl: Which orders were placed by customer {customer_id}?
+- type: 1-hop retrieval
+  cypher: |
+    MATCH (:SalesOrder {id: $order_id})-[:containsProduct]->(p:Product)
+    RETURN DISTINCT p.id AS answer
+  nl: Which products appear in order {order_id}?
+- type: 1-hop retrieval
+  cypher: |
+    MATCH (:SalesOrder {id: $order_id})-[:handledBy]->(e:Employee)
+    RETURN DISTINCT e.id AS answer
+  nl: Which employee handled order {order_id}?
+- type: 1-hop retrieval
+  cypher: |
+    MATCH (s:Store)-[:has_employee]->(:Employee {id: $employee_id})
+    RETURN DISTINCT s.store_code AS answer
+  nl: Which store employs employee {employee_id}?
+- type: 1-hop retrieval
+  cypher: |
+    MATCH (:Store {store_code: $store_code})-[r:stocks]->(:Product {id: $product_id})
+    RETURN r.on_hand_qty AS answer
+  nl: What quantity of product {product_id} is held by store {store_code}?
+- type: 1-hop retrieval
+  cypher: |
+    MATCH (:ReturnRecord {id: $return_id})-[:returnOf]->(o:SalesOrder)
+    RETURN DISTINCT o.id AS answer
+  nl: What order does return record {return_id} refer to?
+- type: 2-hop retrieval
+  cypher: |
+    MATCH (:Customer {id: $customer_id})-[:places]->(:SalesOrder)-[:processedAt]->(s:Store)
+    RETURN DISTINCT s.store_code AS answer
+  nl: Which stores have processed orders from customer {customer_id}?
+- type: 2-hop retrieval
+  cypher: |
+    MATCH (:Supplier {id: $supplier_id})-[:supplies]->(:Product)<-[:stocks]-(s:Store)
+    RETURN DISTINCT s.store_code AS answer
+  nl: Which stores stock products supplied by supplier {supplier_id}?
+- type: 2-hop retrieval
+  cypher: |
+    MATCH (:Store {store_code: $store_code})<-[:processedAt]-(:SalesOrder)-[:containsProduct]->(p:Product)
+    RETURN DISTINCT p.id AS answer
+  nl: Which products appear in orders processed at store {store_code}?
+- type: 2-hop retrieval
+  cypher: |
+    MATCH (c:Customer)-[:places]->(:SalesOrder)-[:containsProduct]->(:Product {id: $product_id})
+    RETURN DISTINCT c.id AS answer
+  nl: Which customers have ordered product {product_id}?
+- type: 2-hop retrieval
+  cypher: |
+    MATCH (:Store {store_code: $store_code})<-[:processedAt]-(:SalesOrder)<-[:returnOf]-(r:ReturnRecord)
+    RETURN DISTINCT r.id AS answer
+  nl: Which returns refer to orders processed at store {store_code}?
+- type: 2-hop retrieval
+  cypher: |
+    MATCH (:Store {store_code: $store_code})-[:has_employee]->(:Employee)<-[:handledBy]-(o:SalesOrder)
+    RETURN DISTINCT o.id AS answer
+  nl: Which orders were handled by staff of store {store_code}?
+- type: 3-hop retrieval
+  cypher: |
+    MATCH (:Supplier {id: $supplier_id})-[:supplies]->(:Product)<-[:containsProduct]-(:SalesOrder)<-[:places]-(c:Customer)
+    RETURN DISTINCT c.id AS answer
+  nl: Which customers purchased products supplied by supplier {supplier_id}?
+- type: 3-hop retrieval
+  cypher: |
+    MATCH (:Customer {id: $customer_id})-[:places]->(:SalesOrder)-[:containsProduct]->(:Product)<-[:supplies]-(s:Supplier)
+    RETURN DISTINCT s.id AS answer
+  nl: Which suppliers provide products ordered by customer {customer_id}?
+- type: 3-hop retrieval
+  cypher: |
+    MATCH (:Store {store_code: $store_code})-[:stocks]->(:Product)<-[:containsProduct]-(:SalesOrder)<-[:places]-(c:Customer)
+    RETURN DISTINCT c.id AS answer
+  nl: Which customers purchased products stocked at store {store_code}?
+- type: 3-hop retrieval
+  cypher: |
+    MATCH (:Store {store_code: $store_code})<-[:processedAt]-(:SalesOrder)-[:containsProduct]->(:Product)<-[:supplies]-(s:Supplier)
+    RETURN DISTINCT s.id AS answer
+  nl: Which suppliers provide products appearing in orders processed at store {store_code}?
+- type: 3-hop retrieval
+  cypher: |
+    MATCH (:Store {store_code: $store_code})<-[:processedAt]-(:SalesOrder)<-[:returnOf]-(:ReturnRecord)-[:approvedBy]->(e:Employee)
+    RETURN DISTINCT e.id AS answer
+  nl: Which employees approved returns for orders processed at store {store_code}?
+- type: 3-hop retrieval
+  cypher: |
+    MATCH (:Employee {id: $employee_id})<-[:handledBy]-(:SalesOrder)-[:containsProduct]->(:Product)<-[:supplies]-(s:Supplier)
+    RETURN DISTINCT s.id AS answer
+  nl: Which suppliers provide products included in orders handled by employee {employee_id}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Store {store_code: $store_code})-[:stocks]->(p:Product)
+    RETURN count(DISTINCT p) AS answer
+  nl: How many different products does store {store_code} stock?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Supplier {id: $supplier_id})-[:supplies]->(p:Product)
+    RETURN count(DISTINCT p) AS answer
+  nl: How many products are supplied by supplier {supplier_id}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Customer {id: $customer_id})-[:places]->(o:SalesOrder)
+    RETURN count(o) AS answer
+  nl: How many orders were placed by customer {customer_id}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Store {store_code: $store_code})-[:has_employee]->(e:Employee)
+    RETURN count(e) AS answer
+  nl: How many employees belong to store {store_code}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:SalesOrder {id: $order_id})-[r:containsProduct]->(:Product)
+    RETURN sum(r.purchased_qty) AS answer
+  nl: What is the total number of items in order {order_id}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Store {store_code: $store_code})-[r:stocks]->(p:Product)
+    RETURN sum(r.on_hand_qty * p.list_price_eur) AS answer
+  nl: What is the total listed value of stock held by store {store_code}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:SalesOrder {id: $order_id})-[r:containsProduct]->(:Product)
+    RETURN sum(r.purchased_qty * r.unit_price_eur) AS answer
+  nl: What is the total value of purchased line items in order {order_id} before order-level discounts?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (o:SalesOrder)-[:containsProduct]->(:Product {id: $product_id})
+    RETURN count(DISTINCT o) AS answer
+  nl: How many different orders include product {product_id}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Store {store_code: $store_code})<-[:processedAt]-(:SalesOrder)<-[:returnOf]-(r:ReturnRecord)
+    RETURN count(DISTINCT r) AS answer
+  nl: How many returns concern orders processed at store {store_code}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Customer {id: $customer_id})-[:places]->(:SalesOrder)-[:containsProduct]->(p:Product)
+    RETURN count(DISTINCT p) AS answer
+  nl: How many distinct products were ordered by customer {customer_id}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Store {store_code: $store_code})-[r:stocks]->(:Product)
+    RETURN sum(r.on_hand_qty) AS answer
+  nl: What is the total on-hand quantity across products stocked at store {store_code}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Supplier {id: $supplier_id})-[:supplies]->(p:Product)
+    RETURN avg(p.list_price_eur) AS answer
+  nl: What is the average list price of products supplied by supplier {supplier_id}?
+- type: Nested Aggregation
+  cypher: |
+    MATCH (s:Store)-[r:stocks]->(:Product)
+    WITH s, sum(r.on_hand_qty) AS score
+    WITH max(score) AS top, collect({answer: s.store_code, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which store holds the greatest total stock quantity?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (s:Supplier)-[:supplies]->(p:Product)
+    WITH s, count(DISTINCT p) AS score
+    WITH max(score) AS top, collect({answer: s.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which supplier provides the largest number of different products?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (p:Product)<-[:containsProduct]-(o:SalesOrder)
+    WITH p, count(DISTINCT o) AS score
+    WITH max(score) AS top, collect({answer: p.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which product is included in the most orders?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (s:Store)<-[:processedAt]-(o:SalesOrder)
+    WITH s, count(o) AS score
+    WITH max(score) AS top, collect({answer: s.store_code, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which store processes the greatest number of orders?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (c:Customer)-[:places]->(o:SalesOrder)
+    WITH c, count(o) AS score
+    WITH max(score) AS top, collect({answer: c.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which customer has placed the most orders?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (s:Store)-[:has_employee]->(e:Employee)
+    WITH s, count(e) AS score
+    WITH max(score) AS top, collect({answer: s.store_code, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which store employs the most staff members?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (p:Product)<-[r:containsProduct]-(:SalesOrder)
+    WITH p, sum(r.purchased_qty * r.unit_price_eur) AS score
+    WITH max(score) AS top, collect({answer: p.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which product has the highest total pre-discount sales value?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (:Store {store_code: $store_code})-[r:stocks]->(p:Product)
+    WITH p, sum(r.on_hand_qty) AS score
+    WITH max(score) AS top, collect({answer: p.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which product has the most units available in store {store_code}?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (:Store {store_code: $store_code})<-[:processedAt]-(o:SalesOrder)-[:containsProduct]->(p:Product)
+    WITH p, count(DISTINCT o) AS score
+    WITH max(score) AS top, collect({answer: p.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which product has been ordered most often at store {store_code}?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (:Supplier {id: $supplier_id})-[:supplies]->(p:Product)
+    WITH p, max(p.list_price_eur) AS score
+    WITH max(score) AS top, collect({answer: p.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which product supplied by supplier {supplier_id} has the highest list price?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (:Store {store_code: $store_code})-[:has_employee]->(e:Employee)<-[:handledBy]-(o:SalesOrder)
+    WITH e, count(o) AS score
+    WITH max(score) AS top, collect({answer: e.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which employee at store {store_code} handled the most orders?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (s:Store)-[r:stocks]->(:Product)
+    WITH s, avg(r.on_hand_qty) AS score
+    WITH max(score) AS top, collect({answer: s.store_code, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which store has the highest average quantity per stocked product?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (s:Supplier)-[:supplies]->(:Product)<-[:containsProduct]-(o:SalesOrder)
+    WITH s, count(DISTINCT o) AS score
+    WITH max(score) AS top, collect({answer: s.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which supplier has products appearing in the most distinct sales orders?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (c:Customer)-[:places]->(:SalesOrder)-[:containsProduct]->(p:Product)
+    WITH c, count(DISTINCT p) AS score
+    WITH max(score) AS top, collect({answer: c.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which customer has bought the widest variety of distinct products?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (:Supplier {id: $supplier_id})-[:supplies]->(p:Product)<-[:stocks]-(s:Store)
+    WITH s, count(DISTINCT p) AS score
+    WITH max(score) AS top, collect({answer: s.store_code, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which store stocks the most products supplied by supplier {supplier_id}?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (:Customer {id: $customer_id})-[:places]->(o:SalesOrder)-[:containsProduct]->(p:Product)
+    WITH p, count(DISTINCT o) AS score
+    WITH max(score) AS top, collect({answer: p.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which product occurs most often in orders placed by customer {customer_id}?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (:Store {store_code: $store_code})<-[:processedAt]-(o:SalesOrder)<-[:places]-(c:Customer)
+    WITH c, count(DISTINCT o) AS score
+    WITH max(score) AS top, collect({answer: c.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which customer has placed the most orders processed at store {store_code}?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (:Store {store_code: $store_code})<-[:processedAt]-(:SalesOrder)-[r:containsProduct]->(p:Product)
+    WITH p, sum(r.purchased_qty * r.unit_price_eur) AS score
+    WITH max(score) AS top, collect({answer: p.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which product has the highest pre-discount sales value in orders processed at store {store_code}?
+  unique_answer: true

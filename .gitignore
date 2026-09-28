@@ -1,0 +1,14 @@
+venv/
+tests/
+.pytest_cache/
+docs/
+.env
+__pycache__/
+
+data/**/*.json
+data/merged*/*.py
+data/merged*/*.txt
+data/MMQA/*.txt
+data/MMQA/*.py
+
+outputs/

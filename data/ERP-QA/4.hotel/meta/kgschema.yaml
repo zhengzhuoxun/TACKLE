@@ -1,0 +1,211 @@
+# ERP-QA scenario 4: Hotel & Hospitality Operations
+# Scope: a small hotel group with rooms, guests, reservations, available
+# services, service charges, and payment records.
+# Counting: an `id` block is one entity property; each `parent` is one relation.
+# Expected: 6 entities, 9 relations (8 explicit + 1 parent),
+#           34 entity properties (29 explicit + 5 generated IDs),
+#           4 relation properties.
+# Relations are listed in dependency order for consistency anchors.
+
+entities:
+  Hotel:
+    count: 4
+    properties:
+      hotel_code:
+        unique: true
+        values: [HT_VIE, HT_GRZ, HT_LNZ, HT_SLZ, HT_INN]
+      hotel_name:                  # aligned: each code has one fixed name
+        aligned_with: hotel_code
+        values: [Danube_Hotel, Riverside_Suites, City_Garden, Alpine_View, Central_Park]
+      city:                        # aligned: HT_VIE -> Vienna, HT_GRZ -> Graz, ...
+        aligned_with: hotel_code
+        values: [Vienna, Graz, Linz, Salzburg, Innsbruck]
+      category:
+        values: [Business, Boutique, Leisure, Extended_Stay]
+      star_rating:
+        type: integer
+        range: [3, 5]
+      opening_year:
+        type: integer
+        range: [1995, 2024]
+
+  Room:
+    parent: Hotel
+    count_per_parent: [2, 4]
+    id:
+      prefix: HR
+      digits: 4
+    properties:
+      room_number:                 # unique within each hotel
+        unique: true
+        values: ['101', '102', '103', '104', '201', '202', '203', '204', '301', '302']
+      room_type:
+        values: [Standard, Deluxe, Suite, Family]
+      floor_number:                # aligned: room 3xx is on floor 3
+        aligned_with: room_number
+        values: [1, 1, 1, 1, 2, 2, 2, 2, 3, 3]
+      max_occupancy:
+        type: integer
+        range: [1, 4]
+      base_rate_eur:
+        type: integer
+        range: [75, 320]
+
+  Guest:
+    count: 20
+    id:
+      prefix: HG
+      digits: 4
+    properties:
+      guest_name:
+        values: [Anna_Schmidt, Oliver_Weber, Sofia_Rossi, Lukas_Meyer, Emma_Novak, Daniel_Klein, Clara_Huber, Felix_Bauer, Mia_Hoffmann, Leo_Wagner]
+      country:
+        values: [Austria, Germany, Italy, France, Spain, Netherlands, Poland]
+      loyalty_tier:
+        values: [Basic, Silver, Gold, Platinum]
+      member_since_date:
+        type: date
+        range: ['2019-01-01', '2025-12-31']
+      preferred_booking_channel:
+        values: [Website, App, Travel_Agency, Telephone]
+
+  Reservation:
+    count: 35
+    id:
+      prefix: HB
+      digits: 5
+    properties:
+      arrival_date:
+        type: date
+        range: ['2024-01-01', '2025-12-31']
+      nights:
+        type: integer
+        range: [1, 14]
+      guest_count:
+        type: integer
+        range: [1, 4]
+      reservation_status:
+        values: [Confirmed, Checked_In, Checked_Out, Cancelled]
+      special_request:
+        values: [None, Quiet_Room, High_Floor, Extra_Bed, Early_Check_In]
+
+  Service:
+    count: 8
+    id:
+      prefix: HS
+      digits: 3
+    properties:
+      service_name:
+        values: [Breakfast, Airport_Shuttle, Late_Checkout, Laundry, Room_Service, Parking, Spa_Access, Bicycle_Rental, Minibar]
+      service_category:
+        values: [Dining, Transport, Convenience, Wellness]
+      standard_fee_eur:
+        type: integer
+        range: [5, 85]
+
+  Payment:
+    count: 40
+    id:
+      prefix: HP
+      digits: 5
+    properties:
+      payment_date:
+        type: date
+        range: ['2024-01-01', '2025-12-31']
+      amount_eur:
+        type: integer
+        range: [20, 1800]
+      payment_method:
+        values: [Card, Cash, Bank_Transfer, Voucher]
+      payment_status:
+        values: [Authorized, Completed, Refunded, Pending]
+      currency:
+        values: [EUR]
+
+relations:
+  - name: offers
+    from: Hotel
+    to: Service
+    from_cardinality:
+      min: 2
+      max: 6
+    to_cardinality:
+      min: 1
+
+  - name: makes
+    from: Guest
+    to: Reservation
+    from_cardinality:
+      min: 0
+      max: 4
+    to_cardinality:
+      min: 1
+      max: 1
+
+  - name: booksRoom
+    from: Reservation
+    to: Room
+    from_cardinality:
+      min: 1
+      max: 1
+    properties:
+      nightly_rate_eur:
+        type: integer
+        range: [70, 350]
+      occupancy_count:
+        type: integer
+        range: [1, 4]
+
+  - name: eligibleFor
+    from: Room
+    to: Service
+    from_cardinality:
+      min: 0
+      max: 3
+    # Room eligibility is limited to services offered by its hotel.
+    consistency:
+      source_anchor: parent_Hotel
+      target_anchor: offers.source
+
+  - name: chargedFor
+    from: Reservation
+    to: Service
+    from_cardinality:
+      min: 0
+      max: 3
+    # Only services offered by the reservation's room hotel may be charged.
+    consistency:
+      source_anchor: booksRoom.target.parent_Hotel
+      target_anchor: offers.source
+    properties:
+      service_quantity:
+        type: integer
+        range: [1, 5]
+      billed_fee_eur:
+        type: integer
+        range: [5, 200]
+
+  - name: settles
+    from: Payment
+    to: Reservation
+    from_cardinality:
+      min: 1
+      max: 1
+    to_cardinality:
+      min: 0
+      max: 3
+
+  - name: paidBy
+    from: Payment
+    to: Guest
+    from_cardinality:
+      min: 1
+      max: 1
+    # The payer may differ from the booking guest (e.g., third-party payer).
+
+  - name: prefersHotel
+    from: Guest
+    to: Hotel
+    from_cardinality:
+      min: 0
+      max: 2

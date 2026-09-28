@@ -1,0 +1,326 @@
+# ERP-QA Table Schema: IT Service & Asset Management
+# Generator-side source-column provenance. Physical names are deliberately
+# heterogeneous and unaligned with KG concept/property names.
+# foreign_keys are construction metadata, not a relational schema given to QA models.
+# Optional (0..1) relations get their own table instead of a nullable column,
+# so no table has empty cells.
+tables:
+- name: org_unit_master
+  base: entity
+  entity: Department
+  description: Organisational unit master data
+  primary_key:
+  - unit_key
+  foreign_keys: []
+  columns:
+  - name: unit_key
+    value_from: entity.Department.department_code
+    description: Organisational unit code
+  - name: unit_title
+    value_from: entity.Department.department_name
+    description: Name of the organisational unit
+  - name: bu_segment
+    value_from: entity.Department.business_unit
+    description: Business unit the organisational unit reports to
+  - name: site
+    value_from: entity.Department.location
+    description: Main location of the organisational unit
+  - name: it_budget_eur
+    value_from: entity.Department.annual_it_budget_eur
+    description: Annual IT budget in euros
+  - name: cc_code
+    value_from: entity.Department.cost_center
+    description: Cost center code
+
+- name: personnel_extract
+  base: entity
+  entity: Employee
+  description: HR personnel extract with organisational unit
+  primary_key:
+  - staff_no
+  foreign_keys:
+  - column: org_ref
+    references:
+      table: org_unit_master
+      column: unit_key
+  columns:
+  - name: staff_no
+    value_from: entity.Employee.id
+    description: Staff identifier
+  - name: org_ref
+    value_from: entity.Employee.parent_Department
+    description: Organisational unit of the staff member
+  - name: display_name
+    value_from: entity.Employee.employee_name
+    description: Staff member name
+  - name: position
+    value_from: entity.Employee.job_title
+    description: Job title
+  - name: contract_kind
+    value_from: entity.Employee.employment_status
+    description: Employment contract category
+  - name: onboarded
+    value_from: entity.Employee.hire_date
+    description: Date the staff member joined
+  - name: workplace
+    value_from: entity.Employee.office_location
+    description: Office location of the staff member
+
+- name: cmdb_hardware
+  base: entity
+  entity: ITAsset
+  description: Configuration management database hardware items
+  primary_key:
+  - ci_tag
+  foreign_keys:
+  - column: cost_owner
+    references:
+      table: org_unit_master
+      column: unit_key
+  columns:
+  - name: ci_tag
+    value_from: entity.ITAsset.id
+    description: Configuration item tag of the asset
+  - name: cost_owner
+    value_from: entity.ITAsset.parent_Department
+    description: Organisational unit owning the asset
+  - name: device_class
+    value_from: entity.ITAsset.asset_type
+    description: Type of device
+  - name: model_ref
+    value_from: entity.ITAsset.model_name
+    description: Device model
+  - name: warranty_until
+    value_from: entity.ITAsset.warranty_end_date
+    description: Warranty end date
+  - name: capex_eur
+    value_from: entity.ITAsset.purchase_cost_eur
+    description: Purchase cost in euros
+  - name: lifecycle_state
+    value_from: entity.ITAsset.asset_status
+    description: Current lifecycle status of the asset
+
+- name: procurement_register
+  base: entity
+  entity: Vendor
+  expand_relation: supplies
+  description: Vendor contracts with supplied hardware items
+  primary_key:
+  - vendor_no
+  - delivered_ci
+  foreign_keys:
+  - column: delivered_ci
+    references:
+      table: cmdb_hardware
+      column: ci_tag
+  columns:
+  - name: vendor_no
+    value_from: entity.Vendor.id
+    description: Vendor identifier
+  - name: company
+    value_from: entity.Vendor.vendor_name
+    description: Vendor company name
+  - name: hq_country
+    value_from: entity.Vendor.country
+    description: Country of the vendor
+  - name: contract_since
+    value_from: entity.Vendor.contract_start_date
+    description: Start date of the vendor contract
+  - name: partner_level
+    value_from: entity.Vendor.contract_level
+    description: Contract level with the vendor
+  - name: vendor_score
+    value_from: entity.Vendor.vendor_rating
+    description: Vendor rating from 1 to 5
+  - name: delivered_ci
+    value_from: relation.supplies.target.ITAsset.id
+    description: Hardware item supplied by the vendor
+
+- name: resolver_groups
+  base: entity
+  entity: SupportTeam
+  expand_relation: supports
+  description: Support groups with the organisational units they cover
+  primary_key:
+  - grp_id
+  - covered_unit
+  foreign_keys:
+  - column: covered_unit
+    references:
+      table: org_unit_master
+      column: unit_key
+  columns:
+  - name: grp_id
+    value_from: entity.SupportTeam.id
+    description: Support group identifier
+  - name: grp_label
+    value_from: entity.SupportTeam.team_name
+    description: Support group name
+  - name: escalation_level
+    value_from: entity.SupportTeam.support_tier
+    description: Support tier of the group
+  - name: roster
+    value_from: entity.SupportTeam.shift
+    description: Working shift of the group
+  - name: resp_target_h
+    value_from: entity.SupportTeam.response_target_hours
+    description: Target response time in hours
+  - name: covered_unit
+    value_from: relation.supports.target.Department.department_code
+    description: Organisational unit supported by the group
+
+- name: group_membership
+  base: relation
+  relation: memberOf
+  description: Support group membership list
+  primary_key:
+  - member_no
+  - group_ref
+  foreign_keys:
+  - column: member_no
+    references:
+      table: personnel_extract
+      column: staff_no
+  columns:
+  - name: member_no
+    value_from: source.Employee.id
+    description: Staff identifier of the group member
+  - name: member_unit
+    value_from: source.Employee.parent_Department
+    description: Organisational unit of the group member
+  - name: group_ref
+    value_from: target.SupportTeam.id
+    description: Support group the staff member belongs to
+
+- name: device_handover
+  base: relation
+  relation: assignedTo
+  description: Device handover log
+  primary_key:
+  - device_ref
+  - holder_id
+  foreign_keys:
+  - column: device_ref
+    references:
+      table: cmdb_hardware
+      column: ci_tag
+  - column: holder_id
+    references:
+      table: personnel_extract
+      column: staff_no
+  columns:
+  - name: device_ref
+    value_from: source.ITAsset.id
+    description: Hardware item handed over
+  - name: holder_id
+    value_from: target.Employee.id
+    description: Staff member holding the device
+  - name: holder_unit
+    value_from: target.Employee.parent_Department
+    description: Organisational unit of the device holder
+  - name: handed_over_on
+    value_from: relation.assignedTo.assignment_date
+    description: Date the device was handed over
+  - name: handover_state
+    value_from: relation.assignedTo.assignment_status
+    description: Status of the device handover
+
+- name: incident_queue
+  base: entity
+  entity: ServiceTicket
+  description: Incident tickets with reporter and routing
+  primary_key:
+  - incident_no
+  foreign_keys:
+  - column: reported_by
+    references:
+      table: personnel_extract
+      column: staff_no
+  - column: queue_grp
+    references:
+      table: resolver_groups
+      column: grp_id
+  columns:
+  - name: incident_no
+    value_from: entity.ServiceTicket.id
+    description: Incident ticket number
+  - name: short_desc
+    value_from: entity.ServiceTicket.subject
+    description: Short description of the issue
+  - name: issue_class
+    value_from: entity.ServiceTicket.issue_category
+    description: Category of the issue
+  - name: logged_on
+    value_from: entity.ServiceTicket.created_date
+    description: Date the ticket was created
+  - name: urgency
+    value_from: entity.ServiceTicket.priority
+    description: Priority reported for the ticket
+  - name: ticket_state
+    value_from: entity.ServiceTicket.ticket_status
+    description: Current ticket status
+  - name: reported_by
+    value_from: relation.submits.source.Employee.id
+    description: Staff member who submitted the ticket
+  - name: queue_grp
+    value_from: relation.handledBy.target.SupportTeam.id
+    description: Support group handling the ticket
+  - name: routed_priority
+    value_from: relation.handledBy.assignment_priority
+    description: Priority assigned when routing the ticket
+  - name: sla_h
+    value_from: relation.handledBy.sla_hours
+    description: Agreed resolution time in hours
+
+- name: incident_ci_links
+  base: relation
+  relation: concerns
+  description: Links between incidents and affected hardware items
+  primary_key:
+  - ticket_ref
+  - affected_ci
+  foreign_keys:
+  - column: ticket_ref
+    references:
+      table: incident_queue
+      column: incident_no
+  - column: affected_ci
+    references:
+      table: cmdb_hardware
+      column: ci_tag
+  columns:
+  - name: ticket_ref
+    value_from: source.ServiceTicket.id
+    description: Incident ticket number
+  - name: affected_ci
+    value_from: target.ITAsset.id
+    description: Hardware item affected by the incident
+  - name: ci_kind
+    value_from: target.ITAsset.asset_type
+    description: Type of the affected device
+
+- name: resolution_log
+  base: relation
+  relation: resolves
+  description: Ticket resolution log
+  primary_key:
+  - closed_ticket
+  foreign_keys:
+  - column: resolver_no
+    references:
+      table: personnel_extract
+      column: staff_no
+  - column: closed_ticket
+    references:
+      table: incident_queue
+      column: incident_no
+  columns:
+  - name: resolver_no
+    value_from: source.Employee.id
+    description: Staff member who resolved the ticket
+  - name: closed_ticket
+    value_from: target.ServiceTicket.id
+    description: Resolved incident ticket
+  - name: effort_min
+    value_from: relation.resolves.resolution_minutes
+    description: Time spent resolving the ticket in minutes

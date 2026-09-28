@@ -1,0 +1,28 @@
+# Entity counts and per-type question quota for the hotel scenario.
+# Sized to be comparable with scenario 1 (~210 entities, 120 questions).
+# 5 hotels with 6-10 rooms each, 8 services, 35 guests making 60 reservations,
+# settled by 60 payments.
+# Hotel codes are unique (max 5 hotels); room numbers are unique within a
+# hotel (max 10 rooms per hotel).
+# Quota: 24 per type; the tightest type (3-hop retrieval) supports ~73 at
+# these counts.
+entities:
+  Hotel:
+    count: 5
+  Room:
+    count_per_parent: [6, 10]
+  Guest:
+    count: 35
+  Reservation:
+    count: 60
+  Service:
+    count: 8
+  Payment:
+    count: 60
+
+question_types:
+  "1-hop retrieval": 24
+  "2-hop retrieval": 24
+  "3-hop retrieval": 24
+  "Flat Aggregation": 24
+  "Nested Aggregation": 24

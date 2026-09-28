@@ -1,0 +1,367 @@
+# ERP-QA question templates: Hotel Hospitality
+# $parameter in Cypher corresponds to {parameter} in the NL question.
+# Every relation and property refers to its paired kgschema.yaml.
+# Return DISTINCT list answers; nested superlatives return all ties,
+# while unique_answer: true allows the generator to discard tied winners.
+# Dates are stored as ISO strings (use date(...) for comparison).
+placeholders:
+  hotel_code:
+  - Hotel
+  - hotel_code
+  room_id:
+  - Room
+  - id
+  guest_id:
+  - Guest
+  - id
+  reservation_id:
+  - Reservation
+  - id
+  service_id:
+  - Service
+  - id
+  payment_id:
+  - Payment
+  - id
+placeholder_links: {}
+templates:
+- type: 1-hop retrieval
+  cypher: |
+    MATCH (:Hotel {hotel_code: $hotel_code})-[:has_room]->(r:Room)
+    RETURN DISTINCT r.id AS answer
+  nl: Which rooms belong to hotel {hotel_code}?
+- type: 1-hop retrieval
+  cypher: |
+    MATCH (:Hotel {hotel_code: $hotel_code})-[:offers]->(s:Service)
+    RETURN DISTINCT s.id AS answer
+  nl: Which services are offered by hotel {hotel_code}?
+- type: 1-hop retrieval
+  cypher: |
+    MATCH (:Guest {id: $guest_id})-[:makes]->(r:Reservation)
+    RETURN DISTINCT r.id AS answer
+  nl: Which reservations were made by guest {guest_id}?
+- type: 1-hop retrieval
+  cypher: |
+    MATCH (:Reservation {id: $reservation_id})-[:booksRoom]->(r:Room)
+    RETURN DISTINCT r.id AS answer
+  nl: Which room is booked by reservation {reservation_id}?
+- type: 1-hop retrieval
+  cypher: |
+    MATCH (:Payment {id: $payment_id})-[:settles]->(r:Reservation)
+    RETURN DISTINCT r.id AS answer
+  nl: Which reservation is settled by payment {payment_id}?
+- type: 1-hop retrieval
+  cypher: |
+    MATCH (:Reservation {id: $reservation_id})-[:chargedFor]->(s:Service)
+    RETURN DISTINCT s.id AS answer
+  nl: Which services are charged to reservation {reservation_id}?
+- type: 1-hop retrieval
+  cypher: |
+    MATCH (:Reservation {id: $reservation_id})-[b:booksRoom]->(:Room)
+    RETURN b.nightly_rate_eur AS answer
+  nl: What nightly rate is recorded for reservation {reservation_id}?
+- type: 2-hop retrieval
+  cypher: |
+    MATCH (:Hotel {hotel_code: $hotel_code})-[:has_room]->(:Room)<-[:booksRoom]-(r:Reservation)
+    RETURN DISTINCT r.id AS answer
+  nl: Which reservations book rooms at hotel {hotel_code}?
+- type: 2-hop retrieval
+  cypher: |
+    MATCH (:Guest {id: $guest_id})-[:makes]->(:Reservation)-[:booksRoom]->(r:Room)
+    RETURN DISTINCT r.id AS answer
+  nl: Which rooms were booked by guest {guest_id}?
+- type: 2-hop retrieval
+  cypher: |
+    MATCH (:Guest {id: $guest_id})-[:makes]->(:Reservation)-[:chargedFor]->(s:Service)
+    RETURN DISTINCT s.id AS answer
+  nl: Which services were charged to reservations made by guest {guest_id}?
+- type: 2-hop retrieval
+  cypher: |
+    MATCH (:Hotel {hotel_code: $hotel_code})-[:offers]->(:Service)<-[:chargedFor]-(r:Reservation)
+    RETURN DISTINCT r.id AS answer
+  nl: Which reservations have charges for services offered by hotel {hotel_code}?
+- type: 2-hop retrieval
+  cypher: |
+    MATCH (:Hotel {hotel_code: $hotel_code})-[:has_room]->(:Room)-[:eligibleFor]->(s:Service)
+    RETURN DISTINCT s.id AS answer
+  nl: Which services are available to rooms in hotel {hotel_code}?
+- type: 2-hop retrieval
+  cypher: |
+    MATCH (:Guest {id: $guest_id})-[:makes]->(:Reservation)<-[:settles]-(p:Payment)
+    RETURN DISTINCT p.id AS answer
+  nl: Which payments are associated with reservations made by guest {guest_id}?
+- type: 2-hop retrieval
+  cypher: |
+    MATCH (:Payment {id: $payment_id})-[:settles]->(:Reservation)-[:booksRoom]->(r:Room)
+    RETURN DISTINCT r.id AS answer
+  nl: Which room is associated with payment {payment_id}?
+- type: 3-hop retrieval
+  cypher: |
+    MATCH (:Hotel {hotel_code: $hotel_code})-[:has_room]->(:Room)<-[:booksRoom]-(:Reservation)<-[:makes]-(g:Guest)
+    RETURN DISTINCT g.id AS answer
+  nl: Which guests made reservations for rooms at hotel {hotel_code}?
+- type: 3-hop retrieval
+  cypher: |
+    MATCH (:Guest {id: $guest_id})-[:makes]->(:Reservation)-[:booksRoom]->(:Room)<-[:has_room]-(h:Hotel)
+    RETURN DISTINCT h.hotel_code AS answer
+  nl: Which hotels contain rooms reserved by guest {guest_id}?
+- type: 3-hop retrieval
+  cypher: |
+    MATCH (:Hotel {hotel_code: $hotel_code})-[:offers]->(:Service)<-[:chargedFor]-(:Reservation)<-[:makes]-(g:Guest)
+    RETURN DISTINCT g.id AS answer
+  nl: Which guests have been charged for services offered by hotel {hotel_code}?
+- type: 3-hop retrieval
+  cypher: |
+    MATCH (:Guest {id: $guest_id})-[:makes]->(:Reservation)<-[:settles]-(:Payment)-[:paidBy]->(g:Guest)
+    RETURN DISTINCT g.id AS answer
+  nl: Which guests paid for reservations made by guest {guest_id}?
+- type: 3-hop retrieval
+  cypher: |
+    MATCH (:Service {id: $service_id})<-[:offers]-(:Hotel)-[:has_room]->(:Room)<-[:booksRoom]-(r:Reservation)
+    RETURN DISTINCT r.id AS answer
+  nl: Which reservations were made for rooms at hotels offering service {service_id}?
+- type: 3-hop retrieval
+  cypher: |
+    MATCH (:Hotel {hotel_code: $hotel_code})-[:has_room]->(:Room)<-[:booksRoom]-(:Reservation)-[:chargedFor]->(s:Service)
+    RETURN DISTINCT s.id AS answer
+  nl: Which services offered by hotel {hotel_code} were charged to reservations for its rooms?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Hotel {hotel_code: $hotel_code})-[:has_room]->(r:Room)
+    RETURN count(r) AS answer
+  nl: How many rooms are in hotel {hotel_code}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Guest {id: $guest_id})-[:makes]->(r:Reservation)
+    RETURN count(r) AS answer
+  nl: How many reservations did guest {guest_id} make?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Hotel {hotel_code: $hotel_code})-[:has_room]->(:Room)<-[:booksRoom]-(r:Reservation)
+    RETURN count(DISTINCT r) AS answer
+  nl: How many reservations book rooms at hotel {hotel_code}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Hotel {hotel_code: $hotel_code})-[:offers]->(s:Service)
+    RETURN count(DISTINCT s) AS answer
+  nl: How many distinct services does hotel {hotel_code} offer?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Reservation {id: $reservation_id})-[r:chargedFor]->(:Service)
+    RETURN sum(r.billed_fee_eur) AS answer
+  nl: What is the total billed service fee on reservation {reservation_id}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Guest {id: $guest_id})-[:makes]->(:Reservation)<-[:settles]-(p:Payment)
+    RETURN sum(p.amount_eur) AS answer
+  nl: What is the total amount of payments linked to reservations made by guest {guest_id}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Hotel {hotel_code: $hotel_code})-[:has_room]->(r:Room)
+    RETURN avg(r.base_rate_eur) AS answer
+  nl: What is the average standard nightly rate across rooms at hotel {hotel_code}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Hotel {hotel_code: $hotel_code})-[:has_room]->(r:Room)<-[:booksRoom]-(:Reservation)
+    RETURN count(DISTINCT r) AS answer
+  nl: How many distinct rooms have at least one reservation at hotel {hotel_code}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Reservation {id: $reservation_id})-[:chargedFor]->(s:Service)
+    RETURN count(DISTINCT s) AS answer
+  nl: How many different services have charges on reservation {reservation_id}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Hotel {hotel_code: $hotel_code})-[:has_room]->(:Room)<-[b:booksRoom]-(:Reservation)
+    RETURN avg(b.nightly_rate_eur) AS answer
+  nl: What is the average booked nightly rate for reservations at hotel {hotel_code}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Guest {id: $guest_id})<-[:paidBy]-(p:Payment)
+    RETURN count(p) AS answer
+  nl: How many payments were made by guest {guest_id}?
+- type: Flat Aggregation
+  cypher: |
+    MATCH (:Reservation {id: $reservation_id})-[r:chargedFor]->(:Service)
+    RETURN sum(r.service_quantity) AS answer
+  nl: What is the sum of service quantities billed for reservation {reservation_id}?
+- type: Nested Aggregation
+  cypher: |
+    MATCH (h:Hotel)-[:has_room]->(r:Room)
+    WITH h, count(r) AS score
+    WITH max(score) AS top, collect({answer: h.hotel_code, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which hotel has the largest number of rooms?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (h:Hotel)-[:has_room]->(:Room)<-[:booksRoom]-(r:Reservation)
+    WITH h, count(DISTINCT r) AS score
+    WITH max(score) AS top, collect({answer: h.hotel_code, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which hotel has received the most room reservations?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (s:Service)<-[:chargedFor]-(r:Reservation)
+    WITH s, count(DISTINCT r) AS score
+    WITH max(score) AS top, collect({answer: s.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which service appears on the greatest number of reservations?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (g:Guest)-[:makes]->(r:Reservation)
+    WITH g, count(r) AS score
+    WITH max(score) AS top, collect({answer: g.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which guest made the most reservations?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (h:Hotel)-[:has_room]->(r:Room)
+    WITH h, avg(r.base_rate_eur) AS score
+    WITH max(score) AS top, collect({answer: h.hotel_code, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which hotel has the highest average standard room rate?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (s:Service)<-[r:chargedFor]-(:Reservation)
+    WITH s, sum(r.billed_fee_eur) AS score
+    WITH max(score) AS top, collect({answer: s.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which service generated the highest total billed service fees?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (g:Guest)<-[:paidBy]-(p:Payment)
+    WITH g, sum(p.amount_eur) AS score
+    WITH max(score) AS top, collect({answer: g.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which guest has the highest total amount of payments made?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (:Hotel {hotel_code: $hotel_code})-[:has_room]->(r:Room)
+    WITH r, max(r.base_rate_eur) AS score
+    WITH max(score) AS top, collect({answer: r.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which room at hotel {hotel_code} has the highest standard nightly rate?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (:Hotel {hotel_code: $hotel_code})-[:has_room]->(r:Room)<-[:booksRoom]-(b:Reservation)
+    WITH r, count(b) AS score
+    WITH max(score) AS top, collect({answer: r.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which room at hotel {hotel_code} was booked most often?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (:Hotel {hotel_code: $hotel_code})-[:offers]->(s:Service)
+    WITH s, max(s.standard_fee_eur) AS score
+    WITH max(score) AS top, collect({answer: s.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which offered service at hotel {hotel_code} has the highest standard fee?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (:Guest {id: $guest_id})-[:makes]->(r:Reservation)
+    WITH r, max(r.guest_count) AS score
+    WITH max(score) AS top, collect({answer: r.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which reservation by guest {guest_id} includes the greatest number of guests?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (h:Hotel)-[:has_room]->(:Room)<-[:booksRoom]-(:Reservation)<-[:settles]-(p:Payment)
+    WITH h, sum(p.amount_eur) AS score
+    WITH max(score) AS top, collect({answer: h.hotel_code, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which hotel has the highest sum of payments associated with its room reservations?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (g:Guest)-[:makes]->(:Reservation)-[:booksRoom]->(:Room)<-[:has_room]-(h:Hotel)
+    WITH g, count(DISTINCT h) AS score
+    WITH max(score) AS top, collect({answer: g.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which guest has reserved rooms in the largest number of distinct hotels?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (:Reservation {id: $reservation_id})<-[:settles]-(p:Payment)
+    WITH p, max(p.amount_eur) AS score
+    WITH max(score) AS top, collect({answer: p.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which payment linked to reservation {reservation_id} has the highest amount?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (:Hotel {hotel_code: $hotel_code})-[:has_room]->(:Room)<-[:booksRoom]-(:Reservation)-[r:chargedFor]->(s:Service)
+    WITH s, sum(r.billed_fee_eur) AS score
+    WITH max(score) AS top, collect({answer: s.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which service has the greatest billed service fee total at hotel {hotel_code}?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (:Guest {id: $guest_id})-[:makes]->(r:Reservation)-[:chargedFor]->(s:Service)
+    WITH s, count(DISTINCT r) AS score
+    WITH max(score) AS top, collect({answer: s.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which service is most often charged to bookings made by guest {guest_id}?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (:Guest {id: $guest_id})-[:makes]->(r:Reservation)-[c:chargedFor]->(:Service)
+    WITH r, sum(c.billed_fee_eur) AS score
+    WITH max(score) AS top, collect({answer: r.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which reservation of guest {guest_id} has the highest total billed service fees?
+  unique_answer: true
+- type: Nested Aggregation
+  cypher: |
+    MATCH (:Hotel {hotel_code: $hotel_code})-[:has_room]->(r:Room)<-[b:booksRoom]-(:Reservation)
+    WITH r, avg(b.nightly_rate_eur) AS score
+    WITH max(score) AS top, collect({answer: r.id, score: score}) AS rows
+    UNWIND rows AS row
+    WITH row, top WHERE row.score = top
+    RETURN row.answer AS answer
+  nl: Which room at hotel {hotel_code} has the highest average booked nightly rate?
+  unique_answer: true
